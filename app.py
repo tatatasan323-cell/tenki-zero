@@ -10,7 +10,8 @@
 - 行レベルの重複（同じ日の同じ数字）も close.py 側で自動排除
 - Excel(.xlsx)/PDFの請求書もそのまま投入可（requirements.txt の借り物を入れた場合）
 """
-import os, io, sys, json, base64, hashlib, re, webbrowser
+import os, io, sys, json, base64, hashlib, re, socket, webbrowser
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import close as tz
@@ -231,17 +232,40 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, json.dumps(r, ensure_ascii=False))
         return self._send(404, json.dumps({"error": "not found"}))
 
+class Srv(ThreadingHTTPServer):
+    allow_reuse_address = False           # Windowsの“二重bind”を防ぐ(使用中なら素直に失敗させる)
+
+def listening(port):
+    with socket.socket() as s:
+        s.settimeout(0.3)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+def is_tenki(port):
+    try:
+        html = urllib.request.urlopen("http://127.0.0.1:%d/" % port, timeout=1).read(4096).decode("utf-8", "ignore")
+        return "tenki-zero" in html
+    except Exception:
+        return False
+
 if __name__ == "__main__":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     srv = None
-    for port in range(PORT, PORT + 10):   # 塞がっていたら隣のポートへ(二重起動でも落ちない)
+    for port in range(PORT, PORT + 10):
+        if listening(port):
+            if is_tenki(port):            # すでに受付が起動中 → 新しく立てずにブラウザで開くだけ
+                url = "http://127.0.0.1:%d" % port
+                print("受付はすでに起動しています → ブラウザで開きます:", url)
+                webbrowser.open(url)
+                sys.exit(0)
+            print("ポート %d は別のアプリが使用中 → 次を試します" % port)
+            continue
         try:
-            srv = ThreadingHTTPServer(("127.0.0.1", port), H)
+            srv = Srv(("127.0.0.1", port), H)
             break
         except OSError:
-            print("ポート %d は使用中 → 次を試します" % port)
+            continue
     if srv is None:
-        print("空きポートが見つかりませんでした。起動中の受付画面を閉じてから、もう一度どうぞ。")
+        print("空きポートが見つかりませんでした。他のアプリを閉じてから、もう一度どうぞ。")
         sys.exit(1)
     url = "http://127.0.0.1:%d" % port
     print("tenki-zero 受付を開きます:", url, "（終了は Ctrl+C）")
