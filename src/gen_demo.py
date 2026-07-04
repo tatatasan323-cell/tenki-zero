@@ -92,7 +92,7 @@ th{background:rgba(255,255,255,.05);color:#dce8f6} td.l,th.l{text-align:left}
 
 <div class="grid">
   <div class="card"><h3>経費</h3>
-    <div class="zone exp" data-type="expenses"><b>ここに放り込む</b><br>経費CSV（日付・取引先・金額）<br>請求書CSVもそのままOK</div>
+    <div class="zone exp" data-type="expenses"><b>ここに放り込む</b><br>経費CSV／請求書CSVそのまま<br>Excel(.xlsx)もOK</div>
     <div class="list" id="list-expenses"></div></div>
   <div class="card"><h3>売上</h3>
     <div class="zone" data-type="sales"><b>ここに放り込む</b><br>日次売上CSV（日付・店舗・売上）</div>
@@ -147,7 +147,64 @@ function parseRows(text){
   return rows.filter(r=>r.some(c=>c.trim()!==''));
 }
 const num=s=>{const t=String(s).replace(/[^0-9.\-]/g,'');const n=parseFloat(t);return isNaN(n)?0:n;};
-const dt=s=>{const m=String(s).trim().match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/);return m?m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0'):null;};
+const dt=s=>{s=String(s).trim();
+  if(/^[45]\d{4}(\.0+)?$/.test(s)){const d=new Date(Date.UTC(1899,11,30)+(+s)*86400000);return d.toISOString().slice(0,10);}  // Excelの日付シリアル値
+  const m=s.match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/);return m?m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0'):null;};
+
+// ===== Excel(.xlsx)読み取り ― 借り物ゼロ(xlsxの正体は“圧縮XML”。解凍はブラウザ標準のDecompressionStream) =====
+const unesc=s=>String(s)
+  .replace(/&#x([0-9a-fA-F]+);/g,(_,h)=>String.fromCodePoint(parseInt(h,16)))
+  .replace(/&#(\d+);/g,(_,d)=>String.fromCodePoint(+d))
+  .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
+async function xlsxToCsv(buf){
+  const u8=new Uint8Array(buf), dv=new DataView(buf);
+  let e=-1;
+  for(let i=u8.length-22;i>=Math.max(0,u8.length-65558);i--){ if(dv.getUint32(i,true)===0x06054b50){e=i;break;} }
+  if(e<0) throw 'not-zip';
+  const n=dv.getUint16(e+10,true); let p=dv.getUint32(e+16,true);
+  const entries={};
+  for(let i=0;i<n;i++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    const method=dv.getUint16(p+10,true), csize=dv.getUint32(p+20,true),
+      nl=dv.getUint16(p+28,true), el=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true),
+      lho=dv.getUint32(p+42,true);
+    entries[new TextDecoder().decode(u8.subarray(p+46,p+46+nl))]={method,csize,lho};
+    p+=46+nl+el+cl;
+  }
+  async function get(name){
+    const f=entries[name]; if(!f) return null;
+    const nl=dv.getUint16(f.lho+26,true), el=dv.getUint16(f.lho+28,true);
+    const data=u8.subarray(f.lho+30+nl+el, f.lho+30+nl+el+f.csize);
+    if(f.method===0) return new TextDecoder().decode(data);
+    return await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+  }
+  const ss=[]; const ssx=await get('xl/sharedStrings.xml');
+  if(ssx) for(const m of ssx.matchAll(/<si[^>]*>([\s\S]*?)<\/si>/g))
+    ss.push(unesc([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(t=>t[1]).join('')));
+  const shName=Object.keys(entries).filter(k=>/^xl\/worksheets\/sheet\d+\.xml$/.test(k)).sort()[0];
+  const sx=await get(shName); if(!sx) throw 'no-sheet';
+  const rows=[];
+  for(const rm of sx.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)){
+    const cells={}; let mx=0;
+    for(const cm of rm[1].matchAll(/<c([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)){
+      const ref=(cm[1].match(/r="([A-Z]+)\d+"/)||[])[1]||'', t=(cm[1].match(/t="(\w+)"/)||[])[1]||'', inner=cm[2]||'';
+      let v='';
+      if(t==='inlineStr') v=unesc([...inner.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(x=>x[1]).join(''));
+      else { const vm=inner.match(/<v>([\s\S]*?)<\/v>/); v=vm?unesc(vm[1]):''; if(t==='s') v=ss[+v]??''; }
+      let ci=0; for(const ch of ref) ci=ci*26+(ch.charCodeAt(0)-64);
+      ci=Math.max(0,ci-1); cells[ci]=v; mx=Math.max(mx,ci);
+    }
+    const row=[]; for(let i=0;i<=mx;i++) row.push(cells[i]??'');
+    if(row.some(c=>String(c).trim()!=='')) rows.push(row);
+  }
+  return rows.map(r=>r.map(c=>{c=String(c);return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(',')).join('\n');
+}
+async function fileToText(f){
+  const n=f.name.toLowerCase();
+  if(n.endsWith('.xlsx')||n.endsWith('.xlsm')) return await xlsxToCsv(await f.arrayBuffer());
+  if(n.endsWith('.pdf')) throw 'pdf';
+  return smartDecode(await f.arrayBuffer());
+}
 const ALIAS={date:['日付','請求日','取引日','営業日','date'],store:['店舗','店名','所属','store'],
  amount:['売上','金額','請求額','amount','total'],vendor:['取引先','仕入先','請求元','vendor'],
  item:['品目','内容','摘要','item'],emp:['従業員コード','社員コード','emp'],minutes:['実労働時間(分)','労働時間(分)','minutes']};
@@ -184,15 +241,23 @@ function loadSamples(){
   addFile('attendance','勤怠_2026-05(サンプル).csv',MASTERS.samples.attendance);
   refresh(); document.getElementById('month').value='2026-05';
 }
+async function takeFiles(fs){
+  for(const f of fs){
+    try{ addFile(curType,f.name,await fileToText(f)); }
+    catch(err){
+      if(err==='pdf') log('✕ PDFは体験版では読めません: '+f.name+' ―― AIに「この表をCSVにして」と頼むか、本物の城（Python版）でどうぞ','err');
+      else log('✕ 読み取れませんでした: '+f.name,'err');
+    }
+  }
+  refresh();
+}
 document.querySelectorAll('.zone').forEach(z=>{
   z.onclick=()=>{curType=z.dataset.type;document.getElementById('picker').click();};
   ['dragover','dragenter'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.add('hover');}));
   z.addEventListener('dragleave',e=>z.classList.remove('hover'));
-  z.addEventListener('drop',async e=>{e.preventDefault();z.classList.remove('hover');curType=z.dataset.type;
-    for(const f of e.dataTransfer.files) addFile(curType,f.name,smartDecode(await f.arrayBuffer()));refresh();});
+  z.addEventListener('drop',e=>{e.preventDefault();z.classList.remove('hover');curType=z.dataset.type;takeFiles(e.dataTransfer.files);});
 });
-document.getElementById('picker').onchange=async e=>{
-  for(const f of e.target.files) addFile(curType,f.name,smartDecode(await f.arrayBuffer()));refresh();};
+document.getElementById('picker').onchange=e=>takeFiles(e.target.files);
 
 const yen=n=>'¥'+Math.round(n).toLocaleString('ja-JP');
 function svgBars(pairs,color){
@@ -283,7 +348,7 @@ function doClose(){
    +'<div class="card"><h3>店舗別 売上</h3>'+svgBars(stores,'#37c39a')+'</div>'
    +'<div class="card"><h3>経費 費目別</h3>'+svgBars(Object.entries(byItem).sort((a,b)=>b[1]-a[1]).slice(0,7),'#f5a524')+'</div>'
    +'<p style="margin:.6em 0 .2em">帳票（クリックで保存）:</p>'+links
-   +'<p class="muted">体験版はここまで（CSVのみ・保存されません）。毎月貯める／Excel・PDF取込／Excel帳票は、本物の城で。</p>';
+   +'<p class="muted">体験版はここまで（CSV・Excel対応／保存されません）。毎月“貯める”・PDF取込・Excel形式の帳票は、本物の城で。</p>';
 }
 refresh();
 </script></body></html>"""
