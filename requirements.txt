@@ -1,0 +1,4 @@
+# 借り物(ライブラリ)。CSVだけなら無しでも動く ― 入れるとExcel/PDF対応が有効になる
+# 導入: python -m venv .venv && .venv\Scripts\pip install -r requirements.txt
+openpyxl
+pymupdf
