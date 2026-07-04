@@ -18,13 +18,15 @@ out/YYYY-MM/ に月次帳票一式（CSV/HTML/Excel）を出力する。
 """
 import os, io, csv, re, sys, sqlite3, datetime
 
+# 借り物の部品はlib/に同梱済み(=増築済みでお届け)。venv等に自前導入があればそちらでも動く
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
 try:
     import openpyxl                     # 借り物① Excel読み書き
 except ImportError:
     openpyxl = None
 try:
     import fitz                         # 借り物② PDF読み取り(PyMuPDF)
-except ImportError:
+except ImportError:                     # 32bit環境や他OSでは同梱版が動かない場合あり→CSV機能のみで続行
     fitz = None
 
 BASE = os.path.dirname(os.path.abspath(__file__))
