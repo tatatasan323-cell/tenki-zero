@@ -233,8 +233,17 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
-    url = "http://127.0.0.1:%d" % PORT
+    srv = None
+    for port in range(PORT, PORT + 10):   # 塞がっていたら隣のポートへ(二重起動でも落ちない)
+        try:
+            srv = ThreadingHTTPServer(("127.0.0.1", port), H)
+            break
+        except OSError:
+            print("ポート %d は使用中 → 次を試します" % port)
+    if srv is None:
+        print("空きポートが見つかりませんでした。起動中の受付画面を閉じてから、もう一度どうぞ。")
+        sys.exit(1)
+    url = "http://127.0.0.1:%d" % port
     print("tenki-zero 受付を開きます:", url, "（終了は Ctrl+C）")
     try:
         webbrowser.open(url)
