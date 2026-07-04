@@ -73,15 +73,14 @@ python app.py
 **CSVだけなら、これで動きます（標準ライブラリのみ＝venv不要）。**
 
 **Excel・PDFの請求書も直接読みたい／Excel帳票（10_月次報告.xlsx）も出したい場合**は、
-“借り物”（外部ライブラリ）を、この城専用の箱（venv）に入れます:
+**`増築.bat` をダブルクリック**（一度だけ・要ネット接続）。
+“借り物”（外部ライブラリ）が、この城専用の箱（venv＝増築部屋）に入ります。
+以後は `起動.bat` が増築部屋を自動で使います。
 
-```
-python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python app.py
-```
+コマンド派は: `python -m venv .venv` → `.venv\Scripts\pip install -r requirements.txt`
 
 借り物を入れなくても、CSV機能はすべて動きます（Excel/PDFはスキップされ、その旨が表示されます）。
+※ PDFで読めるのは「文字の入った表形式のPDF」です。スキャン画像・手書きは、AIに「この表をCSVにして」と頼んでCSVで投入してください。
 
 サンプル（架空5店舗・2026年5月・1ヶ月分）を同梱しています。そのまま
 `python close.py 2026-05` で動きを確かめられます。

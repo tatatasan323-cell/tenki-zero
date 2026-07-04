@@ -1,3 +1,4 @@
 # 実運用データは公開しない(サンプルは samples/ に同梱)
 out/
 *.sqlite
+.venv/
