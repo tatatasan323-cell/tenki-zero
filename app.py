@@ -110,7 +110,7 @@ a.dl:hover{background:rgba(90,160,240,.12)}
 </div>
 
 <div class="card"><h3>手書きの書類は？</h3>
-  <p class="muted" style="font-size:.86rem">スマホで撮影して、AIに「**この表をCSVにして**」と頼んでください。出てきたCSVを、上の受け箱へ ――
+  <p class="muted" style="font-size:.86rem">スマホで撮影して、AIに「<b style="color:#ffd27a">この表をCSVにして</b>」と頼んでください。出てきたCSVを、上の受け箱へ ――
   それがいちばん速くて確実です（この城の入口は、いつもAIです）。</p></div>
 
 <div id="log"></div>
