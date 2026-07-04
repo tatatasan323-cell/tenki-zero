@@ -1,0 +1,11 @@
+﻿取引先パターン,費目コード
+青果,COGS
+ミート,COGS
+食品,COGS
+飲料,COGS
+beverage,COGS
+不動産,RENT
+電力,UTIL
+オフィスプラス,SUPL
+急便,SHIP
+モバイル,TEL
