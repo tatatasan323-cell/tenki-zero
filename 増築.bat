@@ -1,6 +1,6 @@
 @echo off
 chcp 932 >nul
-cd /d %~dp0
+cd /d "%~dp0"
 where python >nul 2>nul
 if errorlevel 1 (
   echo Python が見つかりません。先に https://www.python.org/downloads/ からインストールしてください。

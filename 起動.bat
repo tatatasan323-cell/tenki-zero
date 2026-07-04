@@ -1,6 +1,6 @@
 @echo off
 chcp 932 >nul
-cd /d %~dp0
+cd /d "%~dp0"
 if exist .venv\Scripts\python.exe (
   echo ‘’z•”‰®(venv)‚ÌPython‚Å‹N“®‚µ‚Ü‚·iExcel/PDF‘Î‰j...
   .venv\Scripts\python.exe app.py
