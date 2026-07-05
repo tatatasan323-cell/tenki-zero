@@ -4,10 +4,16 @@
 食品,COGS
 飲料,COGS
 beverage,COGS
+水産,COGS
 不動産,RENT
 電力,UTIL
 オフィスプラス,SUPL
 急便,SHIP
 モバイル,TEL
-水産,COGS
 クリーン,OUTS
+値引,DISC
+廃棄,WASTE
+減価償却,DEPR
+リース,LEASE
+手数料,FEE
+カード,FEE

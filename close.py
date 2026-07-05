@@ -177,8 +177,9 @@ def build_db(month, warnings):
                 continue
             seen.add(key)
             code = "MISC"
+            haystack = (vendor + " " + item).lower()   # 取引先＋品目の両方で仕分け
             for pat, c in rules:
-                if pat.lower() in vendor.lower():
+                if pat.lower() in haystack:
                     code = c
                     break
             con.execute("INSERT INTO expenses VALUES(?,?,?,?,?,?,?)",
@@ -220,6 +221,57 @@ def payroll(con, emps):
         base = int(rate) if wtype == "月給" else round(mins[0] / 60 * int(rate))
         out.append([code, name, dept, wtype, rate, mins[1], round(mins[0] / 60, 1), base])
     return out
+
+def build_matrix(con, items, pay, by_store):
+    """部門別損益マトリクス: 行=勘定科目 / 列=各店舗＋本部＋全社合計。
+    仕入(COGS)は売上比で店舗按分、その他は品目/取引先/所属から部門を判定。"""
+    stores = [s for s, _ in by_store]                # 売上のある店(降順)
+    sales_by = dict(by_store)
+    stotal = sum(sales_by.values()) or 1
+    cols = stores + ["本部", "全社合計"]
+    def blank():
+        return dict((c, 0) for c in cols)
+    def dept_of(item, vendor, code):
+        t = (item or "") + " " + (vendor or "")
+        for s in stores:
+            if s in t:
+                return s
+        return "本部"                                # 店舗名が無ければ本部(管理部門)扱い
+    rev = blank()
+    for s, a in by_store:
+        rev[s] = a
+    rev["全社合計"] = sum(sales_by.values())
+    cogs_total = 0
+    sga = []                                         # [(item_name, {col:amt})] 出現順
+    sga_map = {}
+    for d, v, it, a, code, iname in con.execute(
+            "SELECT date,vendor,item,amount,item_code,item_name FROM expenses"):
+        if code == "COGS":
+            cogs_total += a
+            continue
+        row = sga_map.get(iname)
+        if row is None:
+            row = blank(); sga_map[iname] = row; sga.append((iname, row))
+        dep = dept_of(it, v, code)
+        row[dep] += a; row["全社合計"] += a
+    pr = sga_map.get("給与手当")
+    if pr is None:
+        pr = blank(); sga_map["給与手当"] = pr; sga.insert(0, ("給与手当", pr))
+    for r in pay:
+        pr[r[2]] = pr.get(r[2], 0) + r[7]; pr["全社合計"] += r[7]
+    cogs = blank()
+    for s in stores:
+        cogs[s] = round(cogs_total * sales_by[s] / stotal)
+    cogs["全社合計"] = cogs_total
+    gross = dict((c, rev[c] - cogs[c]) for c in cols)
+    sga = sorted(sga, key=lambda x: (x[0] != "給与手当", -x[1]["全社合計"]))
+    sga_tot = dict((c, sum(r[c] for _, r in sga)) for c in cols)
+    op = dict((c, gross[c] - sga_tot[c]) for c in cols)
+    R = lambda d: [round(d[c]) for c in cols]
+    rows = [["売上高"] + R(rev), ["売上原価(仕入・按分)"] + R(cogs), ["売上総利益"] + R(gross)]
+    rows += [[n] + R(r) for n, r in sga]
+    rows += [["販管費計"] + R(sga_tot), ["営業利益"] + R(op)]
+    return cols, rows
 
 def close(month):
     warnings = []
@@ -277,9 +329,13 @@ def close(month):
          [["収入(売上)", round(sales_total)], ["支出(経費+給与もと)", round(cogs + sga_total)],
           ["差引", round(sales_total - cogs - sga_total)]])
 
-    dashboard(outdir, month, sales_total, gross, op, pay_total, cogs, by_store, by_day, exp, items, misc, dept_pay)
+    mcols, mrows = build_matrix(con, items, pay, by_store)
+    wcsv(J(outdir, "11_部門別損益マトリクス.csv"), ["勘定科目"] + mcols, mrows)
+
+    dashboard(outdir, month, sales_total, gross, op, pay_total, cogs, by_store, by_day, exp, items, misc, dept_pay,
+              (mcols, mrows))
     if openpyxl:
-        excel_report(outdir, month, pl_rows, exp_rows, store_rows, dept_rows)
+        excel_report(outdir, month, pl_rows, exp_rows, store_rows, dept_rows, (mcols, mrows))
     else:
         warnings.append("openpyxl未導入のためExcel帳票(10_月次報告.xlsx)は省略（requirements.txt参照）")
 
@@ -289,7 +345,7 @@ def close(month):
             "op_rate": round(op / sales_total * 100, 1), "misc": len(misc),
             "dedup": dedup, "warnings": warnings, "outdir": outdir, "outputs": outputs}
 
-def excel_report(outdir, month, pl_rows, exp_rows, store_rows, dept_rows):
+def excel_report(outdir, month, pl_rows, exp_rows, store_rows, dept_rows, matrix):
     """役員会議・銀行提出にそのまま使えるExcelブック（借り物openpyxl使用）"""
     wb = openpyxl.Workbook()
     bold = openpyxl.styles.Font(bold=True)
@@ -307,19 +363,23 @@ def excel_report(outdir, month, pl_rows, exp_rows, store_rows, dept_rows):
             for cell in ws[openpyxl.utils.get_column_letter(col)][1:]:
                 cell.number_format = "#,##0"
         for i, _ in enumerate(header, 1):
-            ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = 18
+            ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = 16
         return ws
     wb.remove(wb.active)
+    mcols, mrows = matrix
+    ws = sheet("部門別損益マトリクス", ["勘定科目"] + mcols, mrows, list(range(2, len(mcols) + 2)))
+    for row in ws.iter_rows(min_row=2):
+        if row[0].value in ("売上総利益", "営業利益"):
+            for c in row:
+                c.font = bold
     sheet("月次損益", ["科目", "金額", "備考"], pl_rows, [2])
     sheet("経費内訳", ["費目", "金額", "明細数", "構成比%"], exp_rows, [2])
     sheet("店舗別売上", ["店舗", "売上", "構成比%"], store_rows, [2])
     sheet("部門別実績", ["部門", "売上", "人件費(もと)", "人件費率%"], dept_rows, [2, 3])
-    wb["月次損益"]["E1"] = "%s 月次報告（tenki-zero自動出力）" % month
-    wb["月次損益"]["E1"].font = bold
     wb.save(J(outdir, "10_月次報告_%s.xlsx" % month))
 
 # ---------- 役員ダッシュボード ----------
-def svg_bars(pairs, color, fmt=lambda v: "¥" + format(round(v / 1000), ",") + "k"):
+def svg_bars(pairs, color, fmt=lambda v: "¥" + format(round(v / 1000), ",") + "k", label_every=1, show_val=True):
     W, H, pl, pb, pt = 640, 220, 10, 30, 22
     if not pairs:
         return ""
@@ -332,13 +392,29 @@ def svg_bars(pairs, color, fmt=lambda v: "¥" + format(round(v / 1000), ",") + "
         x = pl + gap * i + (gap - bw) / 2
         h = (H - pt - pb) * (v / mx)
         y = pt + (H - pt - pb) - h
-        b += ('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="3" fill="%s"/>'
-              '<text x="%.1f" y="%.1f" text-anchor="middle" font-size="10.5" fill="#c3d2e4">%s</text>'
-              '<text x="%.1f" y="%d" text-anchor="middle" font-size="11" fill="#aebccd">%s</text>'
-              % (x, y, bw, h, color, x + bw / 2, y - 4, fmt(v), x + bw / 2, H - pb + 15, lab))
+        b += '<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="3" fill="%s"/>' % (x, y, bw, h, color)
+        if show_val:
+            b += '<text x="%.1f" y="%.1f" text-anchor="middle" font-size="10.5" fill="#c3d2e4">%s</text>' % (x + bw / 2, y - 4, fmt(v))
+        if i % label_every == 0:
+            b += '<text x="%.1f" y="%d" text-anchor="middle" font-size="11" fill="#aebccd">%s</text>' % (x + bw / 2, H - pb + 15, lab)
     return '<svg viewBox="0 0 %d %d" width="100%%" style="max-width:680px">%s</svg>' % (W, H, b)
 
-def dashboard(outdir, month, sales, gross, op, pay_total, cogs, by_store, by_day, exp, items, misc, dept_pay):
+def matrix_table(mcols, mrows):
+    """部門別損益マトリクスをHTML表に。売上総利益・営業利益は強調、マイナスは赤。"""
+    def cell(v, emph):
+        neg = " style=\"color:#ff8a8a\"" if v < 0 else ""
+        return "<td%s>%s</td>" % (neg, ("<b>%s</b>" % yen(v)) if emph else yen(v))
+    th = "".join("<th>%s</th>" % c for c in mcols)
+    body = ""
+    for r in mrows:
+        emph = r[0] in ("売上総利益", "営業利益", "売上高")
+        cls = ' class="hl"' if r[0] in ("売上総利益", "営業利益") else ""
+        body += "<tr%s><td class=\"l\">%s</td>%s</tr>" % (cls, r[0], "".join(cell(v, emph) for v in r[1:]))
+    return ('<div style="overflow-x:auto"><table class="mx"><tr><th class="l">勘定科目</th>%s</tr>%s</table></div>'
+            '<p class="muted">※仕入(売上原価)は売上比で店舗按分。本部＝管理部門(売上なし＝費用のみ)。金額は自動集計・転記なし。</p>'
+            % (th, body))
+
+def dashboard(outdir, month, sales, gross, op, pay_total, cogs, by_store, by_day, exp, items, misc, dept_pay, matrix):
     wd = ["月", "火", "水", "木", "金", "土", "日"]
     wsum = {}
     for d, a in by_day:
@@ -361,9 +437,10 @@ def dashboard(outdir, month, sales, gross, op, pay_total, cogs, by_store, by_day
     kpi = (("売上高", yen(sales)), ("売上総利益", yen(gross)), ("営業利益", yen(op)),
            ("原価率", "%.1f%%" % (cogs / sales * 100)), ("人件費率", "%.1f%%" % (pay_total / sales * 100)))
     kpis = "".join('<div class="kpi"><div class="v">%s</div><div class="k">%s</div></div>' % (v, k) for k, v in kpi)
-    daily = svg_bars([(d[8:], a) for d, a in by_day][::3], "#5aa2e6")
+    daily = svg_bars([(str(int(d[8:])), a) for d, a in by_day], "#5aa2e6", label_every=5, show_val=False)
     stores = svg_bars(by_store, "#37c39a")
-    expsvg = svg_bars([(n, a) for c, n, a, k in exp][:7], "#f5a524")
+    expsvg = svg_bars([(n, a) for c, n, a, k in exp][:9], "#f5a524")
+    mtable = matrix_table(*matrix)
     lis = "".join("<li>%s</li>" % c for c in comments)
     html = """<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
 <title>役員ダッシュボード %(m)s</title><style>
@@ -378,15 +455,22 @@ h3{font-size:1rem;color:#eaf3ff;border-left:4px solid #5aa2e6;padding-left:10px}
  border:1px solid rgba(255,255,255,.1);border-radius:13px;padding:12px 14px}
 .kpi .v{font-size:1.3rem;font-weight:800;color:#eaf4ff}.kpi .k{font-size:.74rem;color:#9fb2c9}
 li{margin:.35em 0}.muted{color:#8ea1b8;font-size:.8rem}
+table.mx{border-collapse:collapse;width:100%%;font-size:.82rem;min-width:640px}
+table.mx th,table.mx td{border:1px solid rgba(255,255,255,.1);padding:5px 9px;text-align:right;color:#cdd9e8;white-space:nowrap}
+table.mx th{background:rgba(90,160,240,.16);color:#eaf3ff}
+table.mx td.l,table.mx th.l{text-align:left;position:sticky;left:0;background:#0e1a30}
+table.mx tr.hl td{background:rgba(55,195,154,.12);color:#eaffef}
+table.mx tr:last-child td{border-top:2px solid rgba(255,255,255,.25)}
 </style></head><body><div class="wrap">
 <h1>役員ダッシュボード ─ %(m)s</h1>
 <div class="card"><div class="kpis">%(kpis)s</div></div>
+<div class="card"><h3>部門別 損益マトリクス（一目で全社／店舗／管理部門）</h3>%(mtable)s</div>
 <div class="card"><h3>分析コメント（自動生成）</h3><ul>%(lis)s</ul></div>
 <div class="card"><h3>店舗別 売上</h3>%(stores)s</div>
-<div class="card"><h3>日次売上の推移（3日おき）</h3>%(daily)s</div>
+<div class="card"><h3>日次売上の推移（1日ごと）</h3>%(daily)s</div>
 <div class="card"><h3>経費 費目別（上位）</h3>%(expsvg)s</div>
 <p class="muted">tenki-zero 自動出力 ─ 数字の出所: inbox/（売上・経費・勤怠）。転記は行われていません。</p>
-</div></body></html>""" % dict(m=month, kpis=kpis, lis=lis, stores=stores, daily=daily, expsvg=expsvg)
+</div></body></html>""" % dict(m=month, kpis=kpis, lis=lis, stores=stores, daily=daily, expsvg=expsvg, mtable=mtable)
     with open(J(outdir, "07_役員ダッシュボード.html"), "w", encoding="utf-8") as f:
         f.write(html)
 
