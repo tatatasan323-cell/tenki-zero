@@ -26,10 +26,13 @@ def num(s): return int(re.sub(r"[^\d]", "", s) or 0)
 W("masters/items.csv", "費目コード,費目名,区分\n"
   "COGS,仕入高,売上原価\nSAL,給与手当,販管費\nRENT,地代家賃,販管費\n"
   "UTIL,水道光熱費,販管費\nSUPL,消耗品費,販管費\nSHIP,荷造運賃,販管費\n"
-  "TEL,通信費,販管費\nMISC,未分類,販管費\n")
+  "TEL,通信費,販管費\nOUTS,外注費,販管費\nDISC,値引き,販管費\n"
+  "WASTE,廃棄ロス,販管費\nDEPR,減価償却費,販管費\nLEASE,リース料,販管費\n"
+  "FEE,支払手数料,販管費\nMISC,未分類,販管費\n")
 W("masters/rules.csv", "取引先パターン,費目コード\n"
-  "青果,COGS\nミート,COGS\n食品,COGS\n飲料,COGS\nbeverage,COGS\n"
-  "不動産,RENT\n電力,UTIL\nオフィスプラス,SUPL\n急便,SHIP\nモバイル,TEL\n")
+  "青果,COGS\nミート,COGS\n食品,COGS\n飲料,COGS\nbeverage,COGS\n水産,COGS\n"
+  "不動産,RENT\n電力,UTIL\nオフィスプラス,SUPL\n急便,SHIP\nモバイル,TEL\nクリーン,OUTS\n"
+  "値引,DISC\n廃棄,WASTE\n減価償却,DEPR\nリース,LEASE\n手数料,FEE\nカード,FEE\n")
 W("masters/depts.csv", "部門コード,部門名\nHQ,本部\nSBY,渋谷店\nYKH,横浜店\nKWS,川崎店\nOMY,大宮店\nCHB,千葉店\n")
 W("masters/employees.csv", "従業員コード,氏名,所属,給与区分,単価\n"
   "E001,三田 統括,本部,月給,350000\nE002,佐藤 企画,本部,月給,240000\n"
@@ -62,6 +65,21 @@ lines = ["日付,店舗,売上"] + ["%s,%s,%d" % (d, s, v) for (d, s), v in sort
 W("inbox/sales/売上連携_2026-05-01_2026-05-31.csv", "\n".join(lines) + "\n")
 tot_sales = sum(daily.values())
 print("売上連携CSV: %d行 / 総売上 %s円" % (len(daily), format(tot_sales, ",")))
+
+# ===== 内部経費(値引き・廃棄・減価償却・リース・カード手数料) =====
+store_tot = {}
+for (d, s), v in daily.items():
+    store_tot[s] = store_tot.get(s, 0) + v
+ie = ["日付,取引先,品目,金額"]
+for s, tot in sorted(store_tot.items(), key=lambda x: -x[1]):
+    ie.append("2026-05-31,社内,%s 売上値引き,%d" % (s, int(round(tot * 0.012 / 100)) * 100))
+    ie.append("2026-05-31,社内,%s 廃棄ロス,%d" % (s, int(round(tot * 0.007 / 100)) * 100))
+    ie.append("2026-05-25,カード会社,%s カード決済手数料,%d" % (s, int(round(tot * 0.016 / 100)) * 100))
+ie.append("2026-05-31,社内,減価償却費(本部),180000")
+ie.append("2026-05-05,みらいリース,設備リース料,90000")
+ie.append("2026-05-05,みらいリース,車両リース料,120000")
+W("inbox/expenses/内部経費_2026-05.csv", "\n".join(ie) + "\n")
+print("内部経費CSV: %d行" % (len(ie) - 1))
 
 # ===== 請求書(受領分・バラバラ) =====
 rnd = random.Random(20260531)

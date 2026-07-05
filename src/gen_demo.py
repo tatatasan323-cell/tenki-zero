@@ -29,9 +29,11 @@ DATA = {
     "items": master("items.csv"),        # [code,name,group]
     "rules": master("rules.csv"),        # [pattern,code]
     "emps": master("employees.csv"),     # [code,name,dept,wtype,rate]
+    "depts": master("depts.csv"),        # [code,name]
     "samples": {
         "sales": smart_read(J(BASE, "inbox", "sales", "売上連携_2026-05-01_2026-05-31.csv")),
         "expenses": smart_read(J(BASE, "inbox", "expenses", "経費正規化_2026-05.csv")),
+        "expenses2": smart_read(J(BASE, "inbox", "expenses", "内部経費_2026-05.csv")),
         "attendance": smart_read(J(BASE, "inbox", "attendance", "勤怠_2026-05.csv")),
     },
 }
@@ -72,6 +74,12 @@ a.dl{display:inline-block;margin:3px 6px 3px 0;padding:6px 13px;border:1px solid
 a.dl:hover{background:rgba(90,160,240,.12)}
 .muted{color:#8ea1b8;font-size:.8rem}
 li{margin:.3em 0;font-size:.9rem}
+table.mx{border-collapse:collapse;width:100%;font-size:.8rem;min-width:640px}
+table.mx th,table.mx td{border:1px solid rgba(255,255,255,.1);padding:5px 8px;text-align:right;color:#cdd9e8;white-space:nowrap}
+table.mx th{background:rgba(90,160,240,.16);color:#eaf3ff}
+table.mx td.l,table.mx th.l{text-align:left;position:sticky;left:0;background:#0e1a30}
+table.mx tr.hl td{background:rgba(55,195,154,.12);color:#eaffef}
+table.mx tr:last-child td{border-top:2px solid rgba(255,255,255,.25)}
 #log{font-size:.8rem;color:#b9ccdf;margin-top:8px;max-height:90px;overflow-y:auto}
 .ok{color:#7fe0ae}.skip{color:#ffce7a}.err{color:#ff8a8a}
 table{border-collapse:collapse;width:100%;font-size:.84rem;margin-top:6px}
@@ -238,6 +246,7 @@ function addFile(type,name,text){
 function loadSamples(){
   addFile('sales','売上連携_2026-05(サンプル).csv',MASTERS.samples.sales);
   addFile('expenses','経費正規化_2026-05(サンプル).csv',MASTERS.samples.expenses);
+  addFile('expenses','内部経費_2026-05(サンプル).csv',MASTERS.samples.expenses2);
   addFile('attendance','勤怠_2026-05(サンプル).csv',MASTERS.samples.attendance);
   refresh(); document.getElementById('month').value='2026-05';
 }
@@ -260,15 +269,47 @@ document.querySelectorAll('.zone').forEach(z=>{
 document.getElementById('picker').onchange=e=>takeFiles(e.target.files);
 
 const yen=n=>'¥'+Math.round(n).toLocaleString('ja-JP');
-function svgBars(pairs,color){
-  if(!pairs.length) return '';
+function svgBars(pairs,color,labelEvery,showVal){
+  if(!pairs.length) return ''; labelEvery=labelEvery||1; showVal=showVal!==false;
   const W=640,H=200,pl=10,pb=28,pt=20,mx=Math.max(...pairs.map(p=>p[1]));
   const gap=(W-pl*2)/pairs.length,bw=Math.min(56,gap*0.62);let b='';
   pairs.forEach(([lab,v],i)=>{const x=pl+gap*i+(gap-bw)/2,h=(H-pt-pb)*(v/mx),y=pt+(H-pt-pb)-h;
-    b+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3" fill="'+color+'"/>'
-     +'<text x="'+(x+bw/2).toFixed(1)+'" y="'+(y-4).toFixed(1)+'" text-anchor="middle" font-size="10" fill="#c3d2e4">¥'+Math.round(v/1000).toLocaleString()+'k</text>'
-     +'<text x="'+(x+bw/2).toFixed(1)+'" y="'+(H-pb+15)+'" text-anchor="middle" font-size="11" fill="#aebccd">'+esc(lab)+'</text>';});
+    b+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3" fill="'+color+'"/>';
+    if(showVal) b+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(y-4).toFixed(1)+'" text-anchor="middle" font-size="10" fill="#c3d2e4">¥'+Math.round(v/1000).toLocaleString()+'k</text>';
+    if(i%labelEvery===0) b+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(H-pb+15)+'" text-anchor="middle" font-size="11" fill="#aebccd">'+esc(lab)+'</text>';});
   return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="max-width:680px">'+b+'</svg>';
+}
+function deptMatrix(stores, byStore, exps, items, pay){
+  const cols=stores.concat(['本部','全社合計']);
+  const blank=()=>{const o={};cols.forEach(c=>o[c]=0);return o;};
+  const deptOf=(it,v)=>{const t=(it||'')+' '+(v||'');for(const s of stores)if(t.includes(s))return s;return '本部';};
+  const salesTotal=byStore.reduce((s,x)=>s+x[1],0)||1;
+  const rev=blank(); byStore.forEach(x=>rev[x[0]]=x[1]); rev['全社合計']=byStore.reduce((s,x)=>s+x[1],0);
+  let cogsTotal=0; const sga=[], sgaMap={};
+  exps.forEach(e=>{ if((items[e.code]||[])[1]==='売上原価'){cogsTotal+=e.a;return;}
+    const n=(items[e.code]||[e.code])[0]; let row=sgaMap[n]; if(!row){row=blank();sgaMap[n]=row;sga.push([n,row]);}
+    const d=deptOf(e.it,e.v); row[d]+=e.a; row['全社合計']+=e.a; });
+  let pr=sgaMap['給与手当']; if(!pr){pr=blank();sgaMap['給与手当']=pr;sga.unshift(['給与手当',pr]);}
+  pay.forEach(r=>{pr[r[2]]=(pr[r[2]]||0)+(+r[6]||0);pr['全社合計']+=(+r[6]||0);});
+  const cogs=blank(); stores.forEach(s=>cogs[s]=Math.round(cogsTotal*(rev[s]||0)/salesTotal)); cogs['全社合計']=cogsTotal;
+  const gross=blank(); cols.forEach(c=>gross[c]=rev[c]-cogs[c]);
+  sga.sort((a,b)=>(a[0]==='給与手当'?-1:b[0]==='給与手当'?1:b[1]['全社合計']-a[1]['全社合計']));
+  const sgaTot=blank(); cols.forEach(c=>sga.forEach(x=>sgaTot[c]+=x[1][c]));
+  const op=blank(); cols.forEach(c=>op[c]=gross[c]-sgaTot[c]);
+  const R=d=>cols.map(c=>Math.round(d[c]));
+  const rows=[['売上高'].concat(R(rev)),['売上原価(仕入・按分)'].concat(R(cogs)),['売上総利益'].concat(R(gross))]
+    .concat(sga.map(x=>[x[0]].concat(R(x[1]))))
+    .concat([['販管費計'].concat(R(sgaTot)),['営業利益'].concat(R(op))]);
+  return {cols,rows};
+}
+function matrixHtml(m){
+  const cell=(v,emph)=>'<td'+(v<0?' style="color:#ff8a8a"':'')+'>'+(emph?'<b>'+yen(v)+'</b>':yen(v))+'</td>';
+  const th=m.cols.map(c=>'<th>'+c+'</th>').join('');
+  const body=m.rows.map(r=>{const emph=['売上高','売上総利益','営業利益'].includes(r[0]);
+    const cls=['売上総利益','営業利益'].includes(r[0])?' class="hl"':'';
+    return '<tr'+cls+'><td class="l">'+r[0]+'</td>'+r.slice(1).map(v=>cell(v,emph)).join('')+'</tr>';}).join('');
+  return '<div style="overflow-x:auto"><table class="mx"><tr><th class="l">勘定科目</th>'+th+'</tr>'+body+'</table></div>'
+    +'<p class="muted">※仕入は売上比で店舗按分。本部＝管理部門(費用のみ)。転記なし・自動集計。</p>';
 }
 let dls={};
 function dlLink(name,csv){ dls[name]=csv; return '<a class="dl" onclick="dl(\''+name+'\')">'+name+'</a>'; }
@@ -295,7 +336,8 @@ function doClose(){
       if(!d||d.slice(0,7)!==month||!num(r.amount)) continue;
       const v=r.vendor||fb, key=d+'|'+v+'|'+it+'|'+Math.round(num(r.amount));
       if(seen.has(key)) continue; seen.add(key);
-      let code='MISC'; for(const [pat,c] of MASTERS.rules){ if(v.toLowerCase().includes(pat.toLowerCase())){code=c;break;} }
+      const hay=(v+' '+it).toLowerCase(); let code='MISC';
+      for(const [pat,c] of MASTERS.rules){ if(hay.includes(pat.toLowerCase())){code=c;break;} }
       exps.push({d,v,it,a:num(r.amount),code}); } }
   // 勤怠: (日付,emp) 後勝ち
   const att={};
@@ -342,11 +384,16 @@ function doClose(){
    '曜日では '+topWd[0]+'曜が最大（'+yen(topWd[1])+'）。仕込み・シフトは'+topWd[0]+'曜に厚く。',
    '原価率 '+(cogs/salesTotal*100).toFixed(1)+'%・人件費率 '+(payTotal/salesTotal*100).toFixed(1)+'%。',
    miscN?('未分類の経費が '+miscN+'件 ―― 本物の城では“仕分けルール”に1行足せば翌月から自動になります。'):'経費の未分類は 0件 ―― 仕分けルールは健在です。'];
+  const mtx=deptMatrix(stores.map(s=>s[0]), stores, exps, items, pay);
+  links+=dlLink('11_部門別損益マトリクス.csv',csvOf(['勘定科目'].concat(mtx.cols),mtx.rows));
+  const dayPairs=Object.keys(byDay).sort().map(d=>[String(+d.slice(8)),byDay[d]]);
   document.getElementById('result').innerHTML=
    '<div class="kpis">'+kpi.map(([k,v])=>'<div class="kpi"><div class="v">'+v+'</div><div class="k">'+k+'</div></div>').join('')+'</div>'
+   +'<div class="card"><h3>部門別 損益マトリクス（一目で全社／店舗／管理部門）</h3>'+matrixHtml(mtx)+'</div>'
    +'<div class="card"><h3>分析コメント（自動生成）</h3><ul>'+comments.map(c=>'<li>'+c+'</li>').join('')+'</ul></div>'
    +'<div class="card"><h3>店舗別 売上</h3>'+svgBars(stores,'#37c39a')+'</div>'
-   +'<div class="card"><h3>経費 費目別</h3>'+svgBars(Object.entries(byItem).sort((a,b)=>b[1]-a[1]).slice(0,7),'#f5a524')+'</div>'
+   +'<div class="card"><h3>日次売上の推移（1日ごと）</h3>'+svgBars(dayPairs,'#5aa2e6',5,false)+'</div>'
+   +'<div class="card"><h3>経費 費目別</h3>'+svgBars(Object.entries(byItem).sort((a,b)=>b[1]-a[1]).slice(0,9),'#f5a524')+'</div>'
    +'<p style="margin:.6em 0 .2em">帳票（クリックで保存）:</p>'+links
    +'<p class="muted">体験版はここまで（CSV・Excel対応／保存されません）。毎月“貯める”・PDF取込・Excel形式の帳票は、本物の城で。</p>';
 }
