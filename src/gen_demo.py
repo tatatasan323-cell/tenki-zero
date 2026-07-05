@@ -135,7 +135,9 @@ th{background:rgba(255,255,255,.05);color:#dce8f6} td.l,th.l{text-align:left}
   ▷ どうしても“この城ごと”欲しい方へ: 上のページの「Code → Download ZIP」→ 展開 → <b>起動.bat</b> をダブルクリック（毎月貯まる本物・Excel/PDF対応つき）</p>
 </div>
 
-<p class="muted">tenki-zero 体験版 ／ 制作: AI内製化工房 MITA ─ 連載「AI内製化の羅針盤」#13</p>
+<p class="muted" style="border-top:1px solid rgba(255,255,255,.08);padding-top:12px;margin-top:18px">
+<b>tenki-zero ─ 体験版</b> ／ 制作：AI内製化工房 MITA　｜　公式チャンネル：https://note.com/ai_naiseika ─ 連載「AI内製化の羅針盤」#13<br>
+すべてブラウザの中だけで動きます（送信・保存なし）。ご利用は自己責任で。会計・税務の最終判断は税理士等の専門家にご相談ください。</p>
 <input type="file" id="picker" multiple hidden>
 </div><script>
 const MASTERS = __DATA__;
