@@ -2,3 +2,5 @@
 out/
 *.sqlite
 .venv/
+__pycache__/
+*.pyc

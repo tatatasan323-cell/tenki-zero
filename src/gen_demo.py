@@ -30,6 +30,7 @@ DATA = {
     "rules": master("rules.csv"),        # [pattern,code]
     "emps": master("employees.csv"),     # [code,name,dept,wtype,rate]
     "depts": master("depts.csv"),        # [code,name]
+    "holidays": [r[0] for r in master("holidays.csv")],
     "samples": {
         "sales": smart_read(J(BASE, "inbox", "sales", "売上連携_2026-05-01_2026-05-31.csv")),
         "expenses": smart_read(J(BASE, "inbox", "expenses", "経費正規化_2026-05.csv")),
@@ -43,7 +44,13 @@ HTML = r"""<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
 <title>tenki-zero 体験版 ─ 転記ゼロを、ブラウザで試す</title><style>
 body{margin:0;font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;color:#e9f0fa;line-height:1.6;
  background:linear-gradient(165deg,#0a1020,#0c162b 55%,#0a1224);min-height:100vh}
-.wrap{max-width:1040px;margin:0 auto;padding:22px 18px}
+.wrap{max-width:1180px;margin:0 auto;padding:22px 18px}
+.grid2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px;align-items:start}
+.grid2 .col>.card:first-child{margin-top:12px}
+@media(max-width:920px){.grid2{grid-template-columns:1fr}}
+.lgd{display:flex;flex-wrap:wrap;gap:6px 14px;margin:2px 0 8px;font-size:.74rem;color:#b6cae2}
+.lg{display:inline-flex;align-items:center;gap:5px}
+.lg i{width:11px;height:11px;border-radius:3px;display:inline-block}
 h1{font-size:1.5rem;font-weight:800;background:linear-gradient(112deg,#fff,#8fd0ff 55%,#ffd67a);
  -webkit-background-clip:text;background-clip:text;color:transparent;margin:.2em 0}
 .sub{color:#b6cae2;font-size:.88rem;margin-bottom:6px}
@@ -311,6 +318,27 @@ function matrixHtml(m){
   return '<div style="overflow-x:auto"><table class="mx"><tr><th class="l">勘定科目</th>'+th+'</tr>'+body+'</table></div>'
     +'<p class="muted">※仕入は売上比で店舗按分。本部＝管理部門(費用のみ)。転記なし・自動集計。</p>';
 }
+const PALETTE=['#5aa2e6','#37c39a','#f5a524','#ff6b81','#9b7ede','#4fc3e0','#e0a24a','#7fca6b','#e07aa0','#c9863f','#6f9fce','#d9b34a','#8fd0ff','#ff9f7a'];
+const WDN=['月','火','水','木','金','土','日'], HOL=new Set(MASTERS.holidays);
+function svgDaily(rows){  // rows: [[date,amt]]
+  const W=720,H=210,pl=48,pb=28,pt=14,pr=8,plotH=H-pt-pb;
+  const mx=Math.max(...rows.map(r=>r[1]),1),n=rows.length||1,gap=(W-pl-pr)/n,bw=Math.min(18,gap*0.72);
+  const COL={w:'#5aa2e6',sat:'#3fb7d6',sun:'#ff6b81',hol:'#f5a524'},LC={w:'#9fb0c7',sat:'#7fd6ec',sun:'#ff9db0',hol:'#ffca7a'};
+  let g='';
+  for(let i=0;i<3;i++){const y=pt+plotH*(1-i/2);
+    g+='<line x1="'+pl+'" y1="'+y.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+y.toFixed(1)+'" stroke="rgba(255,255,255,.08)"/>'
+     +'<text x="'+(pl-6)+'" y="'+(y+4).toFixed(1)+'" text-anchor="end" font-size="10" fill="#8296ad">¥'+Math.round(mx*i/2/1000).toLocaleString()+'k</text>';}
+  rows.forEach(([d,a],i)=>{const wd=new Date(d+'T00:00:00').getDay(),jw=(wd+6)%7;
+    const t=HOL.has(d)?'hol':(wd===6?'sat':(wd===0?'sun':'w'));
+    const x=pl+gap*i+(gap-bw)/2,h=plotH*(a/mx),y=pt+plotH-h;
+    g+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2" fill="'+COL[t]+'"><title>'+d+'('+WDN[jw]+') '+yen(a)+'</title></rect>'
+     +'<text x="'+(x+bw/2).toFixed(1)+'" y="'+(H-pb+12)+'" text-anchor="middle" font-size="8.5" fill="'+LC[t]+'">'+(+d.slice(8))+'</text>';});
+  return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="max-width:100%">'+g+'</svg>';
+}
+function svgHstack(segs){const W=720,H=40,total=segs.reduce((s,x)=>s+x[1],0)||1;let x=0,g='';
+  segs.forEach(([n,a,c])=>{const w=W*a/total;
+    g+='<rect x="'+x.toFixed(1)+'" y="6" width="'+Math.max(0.5,w).toFixed(1)+'" height="28" fill="'+c+'"><title>'+n+' '+yen(a)+'（'+(a/total*100).toFixed(1)+'%）</title></rect>';x+=w;});
+  return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="max-width:100%">'+g+'</svg>';}
 let dls={};
 function dlLink(name,csv){ dls[name]=csv; return '<a class="dl" onclick="dl(\''+name+'\')">'+name+'</a>'; }
 function dl(name){ const blob=new Blob(['﻿'+dls[name]],{type:'text/csv'});
@@ -386,14 +414,23 @@ function doClose(){
    miscN?('未分類の経費が '+miscN+'件 ―― 本物の城では“仕分けルール”に1行足せば翌月から自動になります。'):'経費の未分類は 0件 ―― 仕分けルールは健在です。'];
   const mtx=deptMatrix(stores.map(s=>s[0]), stores, exps, items, pay);
   links+=dlLink('11_部門別損益マトリクス.csv',csvOf(['勘定科目'].concat(mtx.cols),mtx.rows));
-  const dayPairs=Object.keys(byDay).sort().map(d=>[String(+d.slice(8)),byDay[d]]);
+  const dayFull=Object.keys(byDay).sort().map(d=>[d,byDay[d]]);
+  const costEntries=Object.entries(byItem).concat([['給与手当',payTotal]]).sort((a,b)=>b[1]-a[1]);
+  const totCost=costEntries.reduce((s,x)=>s+x[1],0)||1;
+  const segs=costEntries.map(([n,a],i)=>[n,a,PALETTE[i%PALETTE.length]]);
+  const lgd=segs.map(([n,a,c])=>'<span class="lg"><i style="background:'+c+'"></i>'+n+' '+yen(a)+'（'+(a/totCost*100).toFixed(0)+'%）</span>').join('');
+  const dayLgd='<span class="lg"><i style="background:#5aa2e6"></i>平日</span><span class="lg"><i style="background:#3fb7d6"></i>土</span><span class="lg"><i style="background:#ff6b81"></i>日</span><span class="lg"><i style="background:#f5a524"></i>祝</span>';
   document.getElementById('result').innerHTML=
    '<div class="kpis">'+kpi.map(([k,v])=>'<div class="kpi"><div class="v">'+v+'</div><div class="k">'+k+'</div></div>').join('')+'</div>'
-   +'<div class="card"><h3>部門別 損益マトリクス（一目で全社／店舗／管理部門）</h3>'+matrixHtml(mtx)+'</div>'
+   +'<div class="grid2">'
+     +'<div class="card"><h3>部門別 損益マトリクス（一目で全社／店舗／管理部門）</h3>'+matrixHtml(mtx)+'</div>'
+     +'<div class="col">'
+       +'<div class="card"><h3>日次売上（土日祝を色分け）</h3><div class="lgd">'+dayLgd+'</div>'+svgDaily(dayFull)+'</div>'
+       +'<div class="card"><h3>経費・費用の内訳（積み上げ）</h3>'+svgHstack(segs)+'<div class="lgd">'+lgd+'</div></div>'
+       +'<div class="card"><h3>店舗別 売上</h3>'+svgBars(stores,'#37c39a')+'</div>'
+     +'</div>'
+   +'</div>'
    +'<div class="card"><h3>分析コメント（自動生成）</h3><ul>'+comments.map(c=>'<li>'+c+'</li>').join('')+'</ul></div>'
-   +'<div class="card"><h3>店舗別 売上</h3>'+svgBars(stores,'#37c39a')+'</div>'
-   +'<div class="card"><h3>日次売上の推移（1日ごと）</h3>'+svgBars(dayPairs,'#5aa2e6',5,false)+'</div>'
-   +'<div class="card"><h3>経費 費目別</h3>'+svgBars(Object.entries(byItem).sort((a,b)=>b[1]-a[1]).slice(0,9),'#f5a524')+'</div>'
    +'<p style="margin:.6em 0 .2em">帳票（クリックで保存）:</p>'+links
    +'<p class="muted">体験版はここまで（CSV・Excel対応／保存されません）。毎月“貯める”・PDF取込・Excel形式の帳票は、本物の城で。</p>';
 }
