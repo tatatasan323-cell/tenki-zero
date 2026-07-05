@@ -11,7 +11,7 @@
 - Excel(.xlsx)/PDFの請求書もそのまま投入可（requirements.txt の借り物を入れた場合）
 """
 import os, io, sys, json, base64, hashlib, re, socket, webbrowser
-import urllib.request, importlib, traceback
+import urllib.request, importlib, traceback, time, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import close as tz
@@ -163,7 +163,7 @@ async function doClose(){
     r=await fetch('/api/close',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({month:m})}).then(r=>r.json());
   }catch(e){
-    document.getElementById('result').innerHTML='<p class="err">サーバと通信できませんでした ─ 受付ウィンドウ(黒い画面)を閉じて、起動.bat をもう一度ダブルクリックしてください</p>';return;
+    document.getElementById('result').innerHTML='<p class="err">サーバと通信できませんでした ─ このタブを閉じて、起動.bat をもう一度ダブルクリックしてください</p>';return;
   }
   if(!r.ok){document.getElementById('result').innerHTML='<p class="err">'+r.error+'</p>';return;}
   const yen=n=>'¥'+n.toLocaleString('ja-JP');
@@ -183,11 +183,18 @@ async function doClose(){
   document.getElementById('result').innerHTML=h;
 }
 refresh();
+setInterval(()=>fetch('/api/ping').catch(()=>{}),3000);  // 生存信号: このタブが閉じられたらサーバも自動終了
 </script></body></html>"""
+
+LAST_SEEN = {"t": None}   # 受付タブからの生存信号。途絶えたらサーバも自動終了する
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):  # 標準の逐次ログは抑制
         pass
+
+    def handle_one_request(self):
+        LAST_SEEN["t"] = time.monotonic()   # どんなリクエストも生存信号として扱う
+        return super().handle_one_request()
 
     def _send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
         self.send_response(code)
@@ -201,6 +208,8 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
             return self._send(200, PAGE, "text/html; charset=utf-8")
+        if self.path == "/api/ping":
+            return self._send(200, "{}")
         if self.path == "/api/files":
             return self._send(200, json.dumps({"files": list_files(), "months": months_available()},
                                               ensure_ascii=False))
@@ -252,7 +261,7 @@ class H(BaseHTTPRequestHandler):
             except Exception as e:
                 traceback.print_exc()
                 return self._send(200, json.dumps(
-                    {"ok": False, "error": "締め処理でエラー: %s ─ 受付ウィンドウを閉じて 起動.bat をやり直してください" % e},
+                    {"ok": False, "error": "締め処理でエラー: %s ─ このタブを閉じて 起動.bat をやり直してください" % e},
                     ensure_ascii=False))
             return self._send(200, json.dumps(r, ensure_ascii=False))
         return self._send(404, json.dumps({"error": "not found"}))
@@ -272,8 +281,31 @@ def is_tenki(port):
     except Exception:
         return False
 
+def watchdog():
+    """受付タブが閉じられたら(生存信号が止まったら)、サーバも静かに終了する。
+    黒い窓は出さない仕様のため、これが無いと見えないプロセスが残り続ける。"""
+    boot_wait = 0
+    stale = 0
+    while True:
+        time.sleep(5)
+        t = LAST_SEEN["t"]
+        if t is None:                     # ブラウザがまだ一度も来ていない
+            boot_wait += 5
+            if boot_wait > 120:           # 2分待っても来なければ起動失敗とみなす
+                os._exit(0)
+            continue
+        if time.monotonic() - t > 12:
+            stale += 1                    # PCスリープ復帰の誤検知を防ぐため2回連続で判定
+            if stale >= 2:
+                os._exit(0)
+        else:
+            stale = 0
+
 if __name__ == "__main__":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    except AttributeError:                # pythonw(窓なし)起動時はコンソールが無い → ログファイルへ
+        sys.stdout = sys.stderr = open(J(BASE, "受付.log"), "w", encoding="utf-8", buffering=1)
     srv = None
     for port in range(PORT, PORT + 10):
         if listening(port):
@@ -293,9 +325,10 @@ if __name__ == "__main__":
         print("空きポートが見つかりませんでした。他のアプリを閉じてから、もう一度どうぞ。")
         sys.exit(1)
     url = "http://127.0.0.1:%d" % port
-    print("tenki-zero 受付を開きます:", url, "（終了は Ctrl+C）")
+    print("tenki-zero 受付を開きます:", url, "（受付のタブを閉じれば自動で終了します）")
     try:
         webbrowser.open(url)
     except Exception:
         pass
+    threading.Thread(target=watchdog, daemon=True).start()
     srv.serve_forever()
