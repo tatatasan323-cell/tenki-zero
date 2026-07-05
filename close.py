@@ -384,6 +384,11 @@ def excel_report(outdir, month, pl_rows, exp_rows, store_rows, dept_rows, matrix
     sheet("経費内訳", ["費目", "金額", "明細数", "構成比%"], exp_rows, [2])
     sheet("店舗別売上", ["店舗", "売上", "構成比%"], store_rows, [2])
     sheet("部門別実績", ["部門", "売上", "人件費(もと)", "人件費率%"], dept_rows, [2, 3])
+    gray = openpyxl.styles.Font(color="8296AD", size=9)
+    for ws in wb.worksheets:
+        ws.append([])
+        ws.append(["tenki-zero 自動出力 ／ 制作：AI内製化工房 MITA ── 会計・税務の最終判断は税理士等の専門家にご相談ください"])
+        ws.cell(ws.max_row, 1).font = gray
     wb.save(J(outdir, "10_月次報告_%s.xlsx" % month))
 
 # ---------- 役員ダッシュボード ----------
@@ -547,7 +552,10 @@ table.mx tr:last-child td{border-top:2px solid rgba(255,255,255,.25)}
     <div class="card"><h3>店舗別 売上</h3>%(stores)s</div>
   </div>
 </div>
-<p class="muted">tenki-zero 自動出力 ─ 数字の出所: inbox/（売上・経費・勤怠）。転記は行われていません。</p>
+<p class="muted" style="border-top:1px solid rgba(255,255,255,.08);padding-top:12px;margin-top:18px">
+<b>tenki-zero ─ 役員ダッシュボード</b> ／ 制作：AI内製化工房 MITA　｜　公式チャンネル：https://note.com/ai_naiseika<br>
+自動出力 ─ 数字の出所: inbox/（売上・経費・勤怠）。転記は行われていません。<br>
+ご利用は自己責任で。会計・税務の最終判断は税理士等の専門家にご相談ください。</p>
 </div></body></html>""" % dict(m=month, kpis=kpis, lis=lis, stores=stores, daily=daily, day_leg=day_leg,
                                  hstack=hstack, exp_leg=exp_leg, mtable=mtable)
     with open(J(outdir, "07_役員ダッシュボード.html"), "w", encoding="utf-8") as f:
