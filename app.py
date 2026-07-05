@@ -83,6 +83,12 @@ select{font-family:inherit;font-size:1rem;padding:8px 12px;border-radius:9px;bor
 a.dl{display:inline-block;margin:3px 6px 3px 0;padding:6px 13px;border:1px solid rgba(143,208,255,.4);
  border-radius:9px;color:#8fd0ff;text-decoration:none;font-size:.84rem}
 a.dl:hover{background:rgba(90,160,240,.12)}
+a.cta{display:inline-block;margin:12px 0 4px;padding:14px 30px;border-radius:13px;font-weight:800;font-size:1.06rem;
+ color:#fff;text-decoration:none;background:linear-gradient(118deg,#ffb020,#ff6b81 62%,#c86bff);
+ box-shadow:0 8px 24px rgba(255,140,60,.35);animation:ctaPulse 1.5s ease-in-out infinite alternate}
+a.cta:hover{filter:brightness(1.1)}
+@keyframes ctaPulse{from{box-shadow:0 8px 20px rgba(255,140,60,.3)}
+ to{box-shadow:0 12px 34px rgba(255,110,130,.6)}}
 .muted{color:#8ea1b8;font-size:.8rem}
 #log{font-size:.83rem;color:#b9ccdf;margin-top:8px;max-height:110px;overflow-y:auto}
 .ok{color:#7fe0ae}.skip{color:#ffce7a}.err{color:#ff8a8a}
@@ -164,8 +170,10 @@ async function doClose(){
   const d=r.dedup;
   if(d.sales_replaced+d.expenses_skipped+d.attendance_replaced>0)
     h+='<p class="muted">重複を自動排除しました ─ 売上上書き'+d.sales_replaced+'件／経費スキップ'+d.expenses_skipped+'件／勤怠上書き'+d.attendance_replaced+'件</p>';
-  h+='<p style="margin:.6em 0 .2em">出力（クリックで保存／ダッシュボードは開く）:</p>'
-    +r.outputs.map(f=>'<a class="dl" href="/out/'+r.month+'/'+encodeURIComponent(f)+'" '+(f.endsWith('.html')?'target="_blank"':'download')+'>'+f+'</a>').join('');
+  const dash=r.outputs.find(f=>f.endsWith('.html'));
+  if(dash) h+='<div><a class="cta" href="/out/'+r.month+'/'+encodeURIComponent(dash)+'" target="_blank">📊 収益を確認！ ― 役員ダッシュボードを開く</a></div>';
+  h+='<p style="margin:.6em 0 .2em">帳票（クリックで保存）:</p>'
+    +r.outputs.filter(f=>f!==dash).map(f=>'<a class="dl" href="/out/'+r.month+'/'+encodeURIComponent(f)+'" download>'+f+'</a>').join('');
   if(r.warnings.length) h+='<p class="err" style="font-size:.82rem">'+r.warnings.join('<br>')+'</p>';
   document.getElementById('result').innerHTML=h;
 }
