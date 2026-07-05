@@ -147,8 +147,7 @@ async function sendFiles(files){
       body:JSON.stringify({type:curType,name:f.name,b64})}).then(r=>r.json());
     if(r.rejected){ log('⛔ 受付できません: '+f.name+' ─ '+r.check.msg,'err'); continue; }
     log((r.saved?'✔ 受付: ':'― スキップ(同じ内容): ')+f.name, r.saved?'ok':'skip');
-    if(r.check&&r.check.level==='warn') log('△ '+f.name+' ─ '+r.check.msg,'skip');
-    else if(r.check&&r.check.level==='ok') log('　'+r.check.msg,'ok');
+    if(r.check&&r.check.level==='ok') log('　'+r.check.msg,'ok');
   }
   refresh();
 }
@@ -221,7 +220,7 @@ def check_sales(path):
         known = set()
     unknown = sorted(stores - known)
     if known and unknown:
-        return {"level": "warn", "msg": "店舗マスタにない名前があります（%s）─ 部門別損益に反映されません。#12記事のツール経由なら正しい店舗名になります" % "、".join(unknown[:3])}
+        return {"level": "err", "msg": "店舗マスタにない店舗名があります（%s）─ %s。新しい店舗なら masters/depts.csv に追加してから" % ("、".join(unknown[:3]), GUIDE_12)}
     days = len({d for d, _ in per})
     return {"level": "ok", "msg": "売上として読めます（%d日分・%s）" % (days, "、".join(sorted(stores)))}
 
