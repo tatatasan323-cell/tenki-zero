@@ -418,7 +418,7 @@ function doClose(){
   const costEntries=Object.entries(byItem).concat([['給与手当',payTotal]]).sort((a,b)=>b[1]-a[1]);
   const totCost=costEntries.reduce((s,x)=>s+x[1],0)||1;
   const segs=costEntries.map(([n,a],i)=>[n,a,PALETTE[i%PALETTE.length]]);
-  const lgd=segs.map(([n,a,c])=>'<span class="lg"><i style="background:'+c+'"></i>'+n+' '+yen(a)+'（'+(a/totCost*100).toFixed(0)+'%）</span>').join('');
+  const lgd=segs.map(([n,a,c])=>'<span class="lg"><i style="background:'+c+'"></i>'+n+' '+yen(a)+'（'+(a/totCost*100).toFixed(1)+'%）</span>').join('');
   const dayLgd='<span class="lg"><i style="background:#5aa2e6"></i>平日</span><span class="lg"><i style="background:#3fb7d6"></i>土</span><span class="lg"><i style="background:#ff6b81"></i>日</span><span class="lg"><i style="background:#f5a524"></i>祝</span>';
   document.getElementById('result').innerHTML=
    '<div class="kpis">'+kpi.map(([k,v])=>'<div class="kpi"><div class="v">'+v+'</div><div class="k">'+k+'</div></div>').join('')+'</div>'
