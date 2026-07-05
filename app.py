@@ -11,7 +11,7 @@
 - Excel(.xlsx)/PDFの請求書もそのまま投入可（requirements.txt の借り物を入れた場合）
 """
 import os, io, sys, json, base64, hashlib, re, socket, webbrowser
-import urllib.request
+import urllib.request, importlib, traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import close as tz
@@ -147,8 +147,13 @@ document.getElementById('picker').onchange=e=>sendFiles(e.target.files);
 async function doClose(){
   const m=document.getElementById('month').value;
   document.getElementById('result').innerHTML='<p class="muted">締めています…</p>';
-  const r=await fetch('/api/close',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({month:m})}).then(r=>r.json());
+  let r;
+  try{
+    r=await fetch('/api/close',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({month:m})}).then(r=>r.json());
+  }catch(e){
+    document.getElementById('result').innerHTML='<p class="err">サーバと通信できませんでした ─ 受付ウィンドウ(黒い画面)を閉じて、起動.bat をもう一度ダブルクリックしてください</p>';return;
+  }
   if(!r.ok){document.getElementById('result').innerHTML='<p class="err">'+r.error+'</p>';return;}
   const yen=n=>'¥'+n.toLocaleString('ja-JP');
   let h='<div class="kpis">'
@@ -227,8 +232,15 @@ class H(BaseHTTPRequestHandler):
             month = req.get("month", "")
             if not re.match(r"^\d{4}-\d{2}$", month):
                 return self._send(400, json.dumps({"ok": False, "error": "月の形式が不正です"}))
-            r = tz.close(month)
-            r["outdir"] = os.path.basename(r.get("outdir", ""))
+            try:
+                importlib.reload(tz)   # 受付を立ち上げたまま close.py が更新されても最新で締める
+                r = tz.close(month)
+                r["outdir"] = os.path.basename(r.get("outdir", ""))
+            except Exception as e:
+                traceback.print_exc()
+                return self._send(200, json.dumps(
+                    {"ok": False, "error": "締め処理でエラー: %s ─ 受付ウィンドウを閉じて 起動.bat をやり直してください" % e},
+                    ensure_ascii=False))
             return self._send(200, json.dumps(r, ensure_ascii=False))
         return self._send(404, json.dumps({"error": "not found"}))
 

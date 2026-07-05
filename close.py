@@ -500,7 +500,7 @@ def dashboard(outdir, month, sales, gross, op, pay_total, cogs, by_store, by_day
     segs = [(n, a, PALETTE[i % len(PALETTE)]) for i, (n, a) in enumerate(cost)]
     hstack = svg_hstack(segs)
     exp_leg = '<div class="lgd">%s</div>' % "".join(
-        '<span><i style="background:%s"></i>%s ¥%s（%.0f%%）</span>' % (c, n, format(round(a), ","), a / tot_cost * 100)
+        '<span><i style="background:%s"></i>%s ¥%s（%.1f%%）</span>' % (c, n, format(round(a), ","), a / tot_cost * 100)
         for n, a, c in segs)
     stores = svg_bars(by_store, "#37c39a")
     mtable = matrix_table(*matrix)
