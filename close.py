@@ -141,9 +141,12 @@ def build_db(month, warnings):
     dedup = {"sales_replaced": 0, "expenses_skipped": 0, "attendance_replaced": 0}
     month_of = lambda d: d and d[:7] == month
     def scan(sub):
-        return [J(BASE, "inbox", sub, f) for f in sorted(os.listdir(J(BASE, "inbox", sub)))
-                if not f.startswith(".") and "お読みください" not in f
-                and f.lower().endswith((".csv", ".tsv", ".xlsx", ".xlsm", ".pdf"))]
+        d = J(BASE, "inbox", sub)
+        fs = [f for f in os.listdir(d)
+              if not f.startswith(".") and "お読みください" not in f
+              and f.lower().endswith((".csv", ".tsv", ".xlsx", ".xlsm", ".pdf"))]
+        # 「後にアップロードした方が勝つ」を字義通りにする: 受付に置かれた時刻順に読む(同時刻は名前順)
+        return [J(d, f) for f in sorted(fs, key=lambda f: (os.path.getmtime(J(d, f)), f))]
 
     # 売上: 同一(日付,店舗)は後から読んだものが優先(再アップロード=上書き)
     sales = {}
