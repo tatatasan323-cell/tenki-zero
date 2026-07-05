@@ -262,7 +262,7 @@ function checkSales(text,name){
     return {level:'err',msg:'同じ日・同じ店舗の行が複数あります（レシート明細のようです）─ このまま入れると数字が欠けます。'+G};
   const known=new Set(MASTERS.depts.map(r=>r[1]));
   const unknown=[...stores].filter(s=>!known.has(s));
-  if(unknown.length) return {level:'warn',msg:'店舗マスタにない名前があります（'+unknown.slice(0,3).join('、')+'）─ 部門別損益に反映されません'};
+  if(unknown.length) return {level:'err',msg:'店舗マスタにない店舗名があります（'+unknown.slice(0,3).join('、')+'）─ '+G};
   return {level:'ok',msg:'売上として読めます（'+new Set(Object.keys(per).map(k=>k.split('|')[0])).size+'日分・'+[...stores].sort().join('、')+'）'};
 }
 function addFile(type,name,text){
@@ -270,8 +270,7 @@ function addFile(type,name,text){
   if(type==='sales'){
     const c=checkSales(text,name);
     if(c.level==='err'){ log('⛔ 受付できません: '+name+' ─ '+c.msg,'err'); return; }
-    files[type].push({name,text}); log('✔ 受付: '+name,'ok');
-    if(c.level==='warn') log('△ '+name+' ─ '+c.msg,'skip'); else log('　'+c.msg,'ok');
+    files[type].push({name,text}); log('✔ 受付: '+name,'ok'); log('　'+c.msg,'ok');
     return;
   }
   files[type].push({name,text}); log('✔ 受付: '+name,'ok');
