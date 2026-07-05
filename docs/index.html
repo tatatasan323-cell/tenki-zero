@@ -69,7 +69,8 @@ th{background:rgba(255,255,255,.05);color:#dce8f6} td.l,th.l{text-align:left}
     <div class="zone exp" data-type="expenses"><b>ここに放り込む</b><br>経費CSV／請求書CSVそのまま<br>Excel(.xlsx)もOK</div>
     <div class="list" id="list-expenses"></div></div>
   <div class="card"><h3>売上</h3>
-    <div class="zone" data-type="sales"><b>ここに放り込む</b><br>日次売上CSV（日付・店舗・売上）</div>
+    <div class="zone" data-type="sales"><b>ここに放り込む</b><br>日次売上CSV（日付・店舗・売上）<br>
+      <span style="font-size:.72rem;color:#8ea1b8">※レジ明細などバラバラの売上は、#12記事の売上集計ツールで綺麗にしてから</span></div>
     <div class="list" id="list-sales"></div></div>
   <div class="card"><h3>勤怠</h3>
     <div class="zone att" data-type="attendance"><b>ここに放り込む</b><br>勤怠システムのCSV（SJISのままOK）</div>
@@ -207,8 +208,31 @@ function refresh(){
   sel.innerHTML=[...ms].sort().reverse().map(m=>'<option>'+m+'</option>').join('')||'<option>----</option>';
   if(cur&&[...ms].includes(cur)) sel.value=cur;
 }
+function checkSales(text,name){
+  // 売上ファイルの試し読み。読めない/明細型は受付で断り、#12の門へ案内する
+  const G='#12記事の売上集計ツールで「連携用CSV」にしてから入れてください';
+  const rs=readTable(text,['date','amount'],name)||[];
+  const per={}, stores=new Set(); let valid=0;
+  for(const r of rs){ const d=dt(r.date); if(!d||!num(r.amount)) continue;
+    valid++; const st=r.store||name.replace(/\.\w+$/,''); stores.add(st);
+    per[d+'|'+st]=(per[d+'|'+st]||0)+1; }
+  if(!valid) return {level:'err',msg:'売上として読める行がありません ─ レジ明細などバラバラの売上は、'+G};
+  if(Math.max(...Object.values(per))>1)
+    return {level:'err',msg:'同じ日・同じ店舗の行が複数あります（レシート明細のようです）─ このまま入れると数字が欠けます。'+G};
+  const known=new Set(MASTERS.depts.map(r=>r[1]));
+  const unknown=[...stores].filter(s=>!known.has(s));
+  if(unknown.length) return {level:'warn',msg:'店舗マスタにない名前があります（'+unknown.slice(0,3).join('、')+'）─ 部門別損益に反映されません'};
+  return {level:'ok',msg:'売上として読めます（'+new Set(Object.keys(per).map(k=>k.split('|')[0])).size+'日分・'+[...stores].sort().join('、')+'）'};
+}
 function addFile(type,name,text){
   if(files[type].some(f=>f.text===text)){ log('― スキップ(同じ内容): '+name,'skip'); return; }
+  if(type==='sales'){
+    const c=checkSales(text,name);
+    if(c.level==='err'){ log('⛔ 受付できません: '+name+' ─ '+c.msg,'err'); return; }
+    files[type].push({name,text}); log('✔ 受付: '+name,'ok');
+    if(c.level==='warn') log('△ '+name+' ─ '+c.msg,'skip'); else log('　'+c.msg,'ok');
+    return;
+  }
   files[type].push({name,text}); log('✔ 受付: '+name,'ok');
 }
 function loadSamples(){

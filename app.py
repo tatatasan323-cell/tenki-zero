@@ -103,7 +103,8 @@ footer{max-width:1180px;margin:12px auto 30px;padding:14px 20px;color:#8296ad;fo
     <div class="zone exp" data-type="expenses"><b>ここに放り込む</b><br>正規化CSV / バラバラ請求書CSV<br>Excel(.xlsx) / PDF もOK</div>
     <div class="list" id="list-expenses"></div></div>
   <div class="card"><h3>売上</h3>
-    <div class="zone" data-type="sales"><b>ここに放り込む</b><br>売上集計ツールの「連携用CSV」<br>日次売上CSV / Excel もOK</div>
+    <div class="zone" data-type="sales"><b>ここに放り込む</b><br>売上集計ツールの「連携用CSV」<br>日次売上CSV / Excel もOK<br>
+      <span style="font-size:.72rem;color:#8ea1b8">※レジ明細などバラバラの売上は、#12記事の売上集計ツールで綺麗にしてから</span></div>
     <div class="list" id="list-sales"></div></div>
   <div class="card"><h3>勤怠</h3>
     <div class="zone att" data-type="attendance"><b>ここに放り込む</b><br>勤怠システムのエクスポートCSV<br>(SJISのままでOK)</div>
@@ -144,7 +145,10 @@ async function sendFiles(files){
     const b64=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result.split(',')[1]);rd.readAsDataURL(f);});
     const r=await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({type:curType,name:f.name,b64})}).then(r=>r.json());
+    if(r.rejected){ log('⛔ 受付できません: '+f.name+' ─ '+r.check.msg,'err'); continue; }
     log((r.saved?'✔ 受付: ':'― スキップ(同じ内容): ')+f.name, r.saved?'ok':'skip');
+    if(r.check&&r.check.level==='warn') log('△ '+f.name+' ─ '+r.check.msg,'skip');
+    else if(r.check&&r.check.level==='ok') log('　'+r.check.msg,'ok');
   }
   refresh();
 }
@@ -187,6 +191,39 @@ setInterval(()=>fetch('/api/ping').catch(()=>{}),3000);  // 生存信号: この
 </script></body></html>"""
 
 LAST_SEEN = {"t": None}   # 受付タブからの生存信号。途絶えたらサーバも自動終了する
+
+GUIDE_12 = "#12記事の売上集計ツールで「連携用CSV」にしてから入れてください"
+
+def check_sales(path):
+    """売上ファイルの試し読み。読めない/明細型は受付で断り、#12の門へ案内する。
+    err=受け付けない ／ warn=受け付けるが注意 ／ ok=正常"""
+    warn = []
+    try:
+        rows = tz.read_table(path, ("date", "amount"), warn)
+    except Exception:
+        rows = []
+    per, stores, valid = {}, set(), 0
+    for r in rows:
+        d = tz.dt(r.get("date"))
+        if not (d and tz.num(r.get("amount"))):
+            continue
+        valid += 1
+        st = r.get("store") or tz.vendor_from_filename(path)
+        stores.add(st)
+        per[(d, st)] = per.get((d, st), 0) + 1
+    if valid == 0:
+        return {"level": "err", "msg": "売上として読める行がありません ─ レジ明細などバラバラの売上は、" + GUIDE_12}
+    if max(per.values()) > 1:
+        return {"level": "err", "msg": "同じ日・同じ店舗の行が複数あります（レシート明細のようです）─ このまま入れると数字が欠けます。" + GUIDE_12}
+    try:
+        known = {r[1] for r in tz.load_master("depts.csv")}
+    except Exception:
+        known = set()
+    unknown = sorted(stores - known)
+    if known and unknown:
+        return {"level": "warn", "msg": "店舗マスタにない名前があります（%s）─ 部門別損益に反映されません。#12記事のツール経由なら正しい店舗名になります" % "、".join(unknown[:3])}
+    days = len({d for d, _ in per})
+    return {"level": "ok", "msg": "売上として読めます（%d日分・%s）" % (days, "、".join(sorted(stores)))}
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):  # 標準の逐次ログは抑制
@@ -249,7 +286,14 @@ class H(BaseHTTPRequestHandler):
                 p = J(BASE, "inbox", t, "%s_%d%s" % (stem, k, ext))
                 k += 1
             open(p, "wb").write(data)
-            return self._send(200, json.dumps({"ok": True, "saved": True}, ensure_ascii=False))
+            check = None
+            if t == "sales":                              # 売上は試し読みして、違うものは門(#12)へ案内
+                check = check_sales(p)
+                if check["level"] == "err":
+                    os.remove(p)                          # 受け付けない(黙って欠けた数字を出さない)
+                    return self._send(200, json.dumps(
+                        {"ok": True, "saved": False, "rejected": True, "check": check}, ensure_ascii=False))
+            return self._send(200, json.dumps({"ok": True, "saved": True, "check": check}, ensure_ascii=False))
         if self.path == "/api/close":
             month = req.get("month", "")
             if not re.match(r"^\d{4}-\d{2}$", month):
