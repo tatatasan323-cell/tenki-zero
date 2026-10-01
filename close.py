@@ -16,7 +16,7 @@ out/YYYY-MM/ に月次帳票一式（CSV/HTML/Excel）を出力する。
   - CSVだけなら標準ライブラリのみで動く。Excel/PDFの取込とExcel帳票は“借り物”
     （openpyxl / PyMuPDF ― requirements.txt）を入れた時だけ有効になる
 """
-import os, io, csv, re, sys, sqlite3, datetime
+import os, io, csv, re, sys, sqlite3, datetime, html
 
 # 借り物の部品はlib/に同梱済み(=増築済みでお届け)。venv等に自前導入があればそちらでも動く
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
@@ -392,6 +392,11 @@ def excel_report(outdir, month, pl_rows, exp_rows, store_rows, dept_rows, matrix
     wb.save(J(outdir, "10_月次報告_%s.xlsx" % month))
 
 # ---------- 役員ダッシュボード ----------
+def E(x):
+    """取り込んだ帳票由来の文字列をHTMLへ出す時は必ず通す。
+    店舗名や勘定科目名に <script> 等が混ざっていても、ただの文字として表示される。"""
+    return html.escape(str(x), quote=True)
+
 def svg_bars(pairs, color, fmt=lambda v: "¥" + format(round(v / 1000), ",") + "k", label_every=1, show_val=True):
     W, H, pl, pb, pt = 640, 220, 10, 30, 22
     if not pairs:
@@ -409,7 +414,7 @@ def svg_bars(pairs, color, fmt=lambda v: "¥" + format(round(v / 1000), ",") + "
         if show_val:
             b += '<text x="%.1f" y="%.1f" text-anchor="middle" font-size="10.5" fill="#c3d2e4">%s</text>' % (x + bw / 2, y - 4, fmt(v))
         if i % label_every == 0:
-            b += '<text x="%.1f" y="%d" text-anchor="middle" font-size="11" fill="#aebccd">%s</text>' % (x + bw / 2, H - pb + 15, lab)
+            b += '<text x="%.1f" y="%d" text-anchor="middle" font-size="11" fill="#aebccd">%s</text>' % (x + bw / 2, H - pb + 15, E(lab))
     return '<svg viewBox="0 0 %d %d" width="100%%" style="max-width:680px">%s</svg>' % (W, H, b)
 
 def matrix_table(mcols, mrows):
@@ -417,12 +422,12 @@ def matrix_table(mcols, mrows):
     def cell(v, emph):
         neg = " style=\"color:#ff8a8a\"" if v < 0 else ""
         return "<td%s>%s</td>" % (neg, ("<b>%s</b>" % yen(v)) if emph else yen(v))
-    th = "".join("<th>%s</th>" % c for c in mcols)
+    th = "".join("<th>%s</th>" % E(c) for c in mcols)
     body = ""
     for r in mrows:
         emph = r[0] in ("売上総利益", "営業利益", "売上高")
         cls = ' class="hl"' if r[0] in ("売上総利益", "営業利益") else ""
-        body += "<tr%s><td class=\"l\">%s</td>%s</tr>" % (cls, r[0], "".join(cell(v, emph) for v in r[1:]))
+        body += "<tr%s><td class=\"l\">%s</td>%s</tr>" % (cls, E(r[0]), "".join(cell(v, emph) for v in r[1:]))
     return ('<div style="overflow-x:auto"><table class="mx"><tr><th class="l">勘定科目</th>%s</tr>%s</table></div>'
             '<p class="muted">※仕入(売上原価)は売上比で店舗按分。本部＝管理部門(売上なし＝費用のみ)。金額は自動集計・転記なし。</p>'
             % (th, body))
@@ -467,13 +472,13 @@ def svg_hstack(segs):
     for name, a, color in segs:
         w = W * a / total
         g += ('<rect x="%.1f" y="6" width="%.1f" height="28" fill="%s"><title>%s %s（%.1f%%）</title></rect>'
-              % (x, max(0.5, w), color, name, yen(a), a / total * 100))
+              % (x, max(0.5, w), color, E(name), yen(a), a / total * 100))
         x += w
     return '<svg viewBox="0 0 %d %d" width="100%%" style="max-width:100%%">%s</svg>' % (W, H, g)
 
 def legend(pairs):
     return '<div class="lgd">%s</div>' % "".join(
-        '<span><i style="background:%s"></i>%s</span>' % (c, t) for t, c in pairs)
+        '<span><i style="background:%s"></i>%s</span>' % (c, E(t)) for t, c in pairs)
 
 def dashboard(outdir, month, sales, gross, op, pay_total, cogs, by_store, by_day, exp, items, misc, dept_pay,
               matrix, pay_tot, holidays):
@@ -508,11 +513,11 @@ def dashboard(outdir, month, sales, gross, op, pay_total, cogs, by_store, by_day
     segs = [(n, a, PALETTE[i % len(PALETTE)]) for i, (n, a) in enumerate(cost)]
     hstack = svg_hstack(segs)
     exp_leg = '<div class="lgd">%s</div>' % "".join(
-        '<span><i style="background:%s"></i>%s ¥%s（%.1f%%）</span>' % (c, n, format(round(a), ","), a / tot_cost * 100)
+        '<span><i style="background:%s"></i>%s ¥%s（%.1f%%）</span>' % (c, E(n), format(round(a), ","), a / tot_cost * 100)
         for n, a, c in segs)
     stores = svg_bars(by_store, "#37c39a")
     mtable = matrix_table(*matrix)
-    lis = "".join("<li>%s</li>" % c for c in comments)
+    lis = "".join("<li>%s</li>" % E(c) for c in comments)
 
     html = """<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">

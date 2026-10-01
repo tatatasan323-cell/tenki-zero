@@ -366,7 +366,7 @@ function svgHstack(segs){const W=720,H=40,total=segs.reduce((s,x)=>s+x[1],0)||1;
   return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="max-width:100%">'+g+'</svg>';}
 let dls={};
 function dlLink(name,csv){ dls[name]=csv; return '<a class="dl" onclick="dl(\''+name+'\')">'+name+'</a>'; }
-function dl(name){ const blob=new Blob(['﻿'+dls[name]],{type:'text/csv'});
+function dl(name){ const blob=new Blob(['\ufeff'+dls[name]],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click(); }
 const csvOf=(hdr,rows)=>hdr.join(',')+'\n'+rows.map(r=>r.join(',')).join('\n')+'\n';
 

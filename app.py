@@ -130,14 +130,15 @@ footer{max-width:1180px;margin:12px auto 30px;padding:14px 20px;color:#8296ad;fo
 データはこのPCの中だけで処理され、外部には送信されません。ご利用は自己責任で。会計・税務の最終判断は税理士等の専門家にご相談ください。</footer>
 <script>
 let curType=null;
-const log=(m,c)=>{const d=document.getElementById('log');d.innerHTML='<div class="'+(c||'')+'">'+m+'</div>'+d.innerHTML;};
+const E=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const log=(m,c)=>{const d=document.getElementById('log');d.innerHTML='<div class="'+(c||'')+'">'+E(m)+'</div>'+d.innerHTML;};
 async function refresh(){
   const r=await fetch('/api/files').then(r=>r.json());
   for(const t in r.files){
-    document.getElementById('list-'+t).innerHTML=r.files[t].map(f=>'<div>'+f.name+'　<span style="opacity:.6">'+f.kb+'KB</span></div>').join('')||'<div style="opacity:.5">（まだありません）</div>';
+    document.getElementById('list-'+t).innerHTML=r.files[t].map(f=>'<div>'+E(f.name)+'　<span style="opacity:.6">'+E(f.kb)+'KB</span></div>').join('')||'<div style="opacity:.5">（まだありません）</div>';
   }
   const sel=document.getElementById('month'); const cur=sel.value;
-  sel.innerHTML=r.months.map(m=>'<option>'+m+'</option>').join('')||'<option>2026-05</option>';
+  sel.innerHTML=r.months.map(m=>'<option>'+E(m)+'</option>').join('')||'<option>2026-05</option>';
   if(cur) sel.value=cur;
 }
 async function sendFiles(files){
@@ -168,7 +169,7 @@ async function doClose(){
   }catch(e){
     document.getElementById('result').innerHTML='<p class="err">サーバと通信できませんでした ─ このタブを閉じて、起動.bat をもう一度ダブルクリックしてください</p>';return;
   }
-  if(!r.ok){document.getElementById('result').innerHTML='<p class="err">'+r.error+'</p>';return;}
+  if(!r.ok){document.getElementById('result').innerHTML='<p class="err">'+E(r.error)+'</p>';return;}
   const yen=n=>'¥'+n.toLocaleString('ja-JP');
   let h='<div class="kpis">'
     +'<div class="kpi"><div class="v">'+yen(r.sales)+'</div><div class="k">売上高</div></div>'
@@ -179,10 +180,10 @@ async function doClose(){
   if(d.sales_replaced+d.expenses_skipped+d.attendance_replaced>0)
     h+='<p class="muted">重複を自動排除しました ─ 売上上書き'+d.sales_replaced+'件／経費スキップ'+d.expenses_skipped+'件／勤怠上書き'+d.attendance_replaced+'件</p>';
   const dash=r.outputs.find(f=>f.endsWith('.html'));
-  if(dash) h+='<div><a class="cta" href="/out/'+r.month+'/'+encodeURIComponent(dash)+'" target="_blank">📊 収益を確認！ ― 役員ダッシュボードを開く</a></div>';
+  if(dash) h+='<div><a class="cta" href="/out/'+encodeURIComponent(r.month)+'/'+encodeURIComponent(dash)+'" target="_blank">📊 収益を確認！ ― 役員ダッシュボードを開く</a></div>';
   h+='<p style="margin:.6em 0 .2em">帳票（クリックで保存）:</p>'
-    +r.outputs.filter(f=>f!==dash).map(f=>'<a class="dl" href="/out/'+r.month+'/'+encodeURIComponent(f)+'" download>'+f+'</a>').join('');
-  if(r.warnings.length) h+='<p class="err" style="font-size:.82rem">'+r.warnings.join('<br>')+'</p>';
+    +r.outputs.filter(f=>f!==dash).map(f=>'<a class="dl" href="/out/'+encodeURIComponent(r.month)+'/'+encodeURIComponent(f)+'" download>'+E(f)+'</a>').join('');
+  if(r.warnings.length) h+='<p class="err" style="font-size:.82rem">'+r.warnings.map(E).join('<br>')+'</p>';
   document.getElementById('result').innerHTML=h;
 }
 refresh();
