@@ -40,6 +40,7 @@ DATA = {
 }
 
 HTML = r"""<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>tenki-zero 体験版 ─ 転記ゼロを、ブラウザで試す</title><style>
 body{margin:0;font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;color:#e9f0fa;line-height:1.6;
@@ -144,7 +145,7 @@ th{background:rgba(255,255,255,.05);color:#dce8f6} td.l,th.l{text-align:left}
 const MASTERS = __DATA__;
 let files={sales:[],expenses:[],attendance:[]};   // {name, text}
 let curType=null;
-const log=(m,c)=>{const d=document.getElementById('log');d.innerHTML='<div class="'+(c||'')+'">'+m+'</div>'+d.innerHTML;};
+const log=(m,c)=>{const d=document.getElementById('log');d.innerHTML='<div class="'+(c||'')+'">'+esc(m)+'</div>'+d.innerHTML;};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 function smartDecode(buf){
@@ -336,10 +337,10 @@ function deptMatrix(stores, byStore, exps, items, pay){
 }
 function matrixHtml(m){
   const cell=(v,emph)=>'<td'+(v<0?' style="color:#ff8a8a"':'')+'>'+(emph?'<b>'+yen(v)+'</b>':yen(v))+'</td>';
-  const th=m.cols.map(c=>'<th>'+c+'</th>').join('');
+  const th=m.cols.map(c=>'<th>'+esc(c)+'</th>').join('');
   const body=m.rows.map(r=>{const emph=['売上高','売上総利益','営業利益'].includes(r[0]);
     const cls=['売上総利益','営業利益'].includes(r[0])?' class="hl"':'';
-    return '<tr'+cls+'><td class="l">'+r[0]+'</td>'+r.slice(1).map(v=>cell(v,emph)).join('')+'</tr>';}).join('');
+    return '<tr'+cls+'><td class="l">'+esc(r[0])+'</td>'+r.slice(1).map(v=>cell(v,emph)).join('')+'</tr>';}).join('');
   return '<div style="overflow-x:auto"><table class="mx"><tr><th class="l">勘定科目</th>'+th+'</tr>'+body+'</table></div>'
     +'<p class="muted">※仕入は売上比で店舗按分。本部＝管理部門(費用のみ)。転記なし・自動集計。</p>';
 }
@@ -443,7 +444,7 @@ function doClose(){
   const costEntries=Object.entries(byItem).concat([['給与手当',payTotal]]).sort((a,b)=>b[1]-a[1]);
   const totCost=costEntries.reduce((s,x)=>s+x[1],0)||1;
   const segs=costEntries.map(([n,a],i)=>[n,a,PALETTE[i%PALETTE.length]]);
-  const lgd=segs.map(([n,a,c])=>'<span class="lg"><i style="background:'+c+'"></i>'+n+' '+yen(a)+'（'+(a/totCost*100).toFixed(1)+'%）</span>').join('');
+  const lgd=segs.map(([n,a,c])=>'<span class="lg"><i style="background:'+c+'"></i>'+esc(n)+' '+yen(a)+'（'+(a/totCost*100).toFixed(1)+'%）</span>').join('');
   const dayLgd='<span class="lg"><i style="background:#5aa2e6"></i>平日</span><span class="lg"><i style="background:#3fb7d6"></i>土</span><span class="lg"><i style="background:#ff6b81"></i>日</span><span class="lg"><i style="background:#f5a524"></i>祝</span>';
   document.getElementById('result').innerHTML=
    '<div class="kpis">'+kpi.map(([k,v])=>'<div class="kpi"><div class="v">'+v+'</div><div class="k">'+k+'</div></div>').join('')+'</div>'
