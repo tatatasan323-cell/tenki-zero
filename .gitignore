@@ -5,3 +5,7 @@ out/
 __pycache__/
 *.pyc
 受付.log
+
+# AGPLのPyMuPDFは同梱しない（ライセンスの都合。PDFを読む人が増築.batかpipで入れる）
+lib/pymupdf/
+lib/fitz/

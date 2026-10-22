@@ -18,7 +18,8 @@ out/YYYY-MM/ に月次帳票一式（CSV/HTML/Excel）を出力する。
 """
 import os, io, csv, re, sys, sqlite3, datetime, html
 
-# 借り物の部品はlib/に同梱済み(=増築済みでお届け)。venv等に自前導入があればそちらでも動く
+# openpyxl・et_xmlfile(MIT)はlib/に同梱済み。PyMuPDF(AGPL)は同梱しない(PDFを読むなら増築.batかpip install pymupdf)。
+# venv等に自前導入があればそちらでも動く
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
 try:
     import openpyxl                     # 借り物① Excel読み書き
@@ -26,7 +27,7 @@ except ImportError:
     openpyxl = None
 try:
     import fitz                         # 借り物② PDF読み取り(PyMuPDF)
-except ImportError:                     # 32bit環境や他OSでは同梱版が動かない場合あり→CSV機能のみで続行
+except ImportError:                     # 未導入→PDFだけスキップしてCSV・Excelは続行
     fitz = None
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -58,7 +59,7 @@ def rows_of(path, warnings):
                 if any(c is not None and str(c).strip() for c in row)]
     if ext == ".pdf":
         if not fitz:
-            warnings.append("PyMuPDF未導入のためPDFをスキップ: " + os.path.basename(path))
+            warnings.append("PyMuPDF未導入のためPDFをスキップ（増築.batで有効になります）: " + os.path.basename(path))
             return []
         doc = fitz.open(path)
         lines = []
@@ -211,11 +212,18 @@ def build_db(month, warnings):
 
 # ---------- 帳票 ----------
 def yen(n): return "¥{:,}".format(round(n))
+def csv_safe(v):
+    """表計算ソフトで開いた時に数式として動かないよう、「= @」や、数字以外が続く「+ -」で始まる文字列の先頭に ' を付ける（数値はそのまま）。
+    取り込んだ店舗名・取引先名が、書き出したCSV／Excelの中で数式になるのを防ぐ（openpyxl は「=」で始まる文字列を数式として保存する）"""
+    if isinstance(v, str) and v and (v[0] in "=@\t\r" or (v[0] in "+-" and not re.fullmatch(r"[+\-]?[\d\s().,\-%¥￥]+", v))):
+        return "'" + v
+    return v
+
 def wcsv(path, header, rows):
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
-        w.writerow(header)
-        w.writerows(rows)
+        w.writerow([csv_safe(x) for x in header])
+        w.writerows([[csv_safe(x) for x in r] for r in rows])
 
 def payroll(con, emps):
     out = []
@@ -361,12 +369,12 @@ def excel_report(outdir, month, pl_rows, exp_rows, store_rows, dept_rows, matrix
     white = openpyxl.styles.Font(bold=True, color="FFFFFF")
     def sheet(name, header, rows, money_cols):
         ws = wb.create_sheet(name)
-        ws.append(header)
+        ws.append([csv_safe(x) for x in header])
         for c in ws[1]:
             c.font = white
             c.fill = fill
         for r in rows:
-            ws.append(r)
+            ws.append([csv_safe(x) for x in r])
         for col in money_cols:
             for cell in ws[openpyxl.utils.get_column_letter(col)][1:]:
                 cell.number_format = "#,##0"

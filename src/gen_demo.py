@@ -369,7 +369,9 @@ let dls={};
 function dlLink(name,csv){ dls[name]=csv; return '<a class="dl" onclick="dl(\''+name+'\')">'+name+'</a>'; }
 function dl(name){ const blob=new Blob(['\ufeff'+dls[name]],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click(); }
-const csvOf=(hdr,rows)=>hdr.join(',')+'\n'+rows.map(r=>r.join(',')).join('\n')+'\n';
+function csvFx(v){ var s=(v==null)?'':String(v); if(/^[=@\t\r]/.test(s)||(/^[+\-]/.test(s)&&!/^[+\-]?[\d\s().,\-%¥￥]+$/.test(s))) s="'"+s; return s; }
+function csvCell(v){ var s=csvFx(v); return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
+const csvOf=(hdr,rows)=>hdr.map(csvCell).join(',')+'\n'+rows.map(r=>r.map(csvCell).join(',')).join('\n')+'\n';
 
 function doClose(){
   const month=document.getElementById('month').value;
