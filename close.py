@@ -45,6 +45,14 @@ def smart_read(path):
             continue
     return raw.decode("utf-8", errors="replace")
 
+# PDFの1行を列に割る。桁区切りのカンマ（¥40,000 の「,」）では割らない。割ると「¥40」と「000」になり、40円で入ってしまう
+PDF_SPLIT = re.compile(r"\t|\s{2,}|(?<!\d),|,(?!\d{3}(?!\d))")
+
+
+def pdf_cols(line):
+    return PDF_SPLIT.split(line.strip())
+
+
 def rows_of(path, warnings):
     """CSV/TSV/Excel/PDF を同じ「行の表」に揃える"""
     ext = os.path.splitext(path)[1].lower()
@@ -65,10 +73,12 @@ def rows_of(path, warnings):
         lines = []
         for page in doc:
             lines += [l for l in page.get_text().splitlines() if l.strip()]
-        rows = [re.split(r"[,\t]|\s{2,}", l.strip()) for l in lines]
-        if not any(len(r) >= 2 for r in rows):
+        rows = [pdf_cols(l) for l in lines]
+        # 1行に項目が並んだ形でないPDF（罫線の表はセルが1行ずつ出る）は、読めたことにしない
+        if sum(1 for r in rows if len(r) >= 2) < 2:
             warnings.append("PDFから表を読み取れませんでした（AIに『CSVにして』と頼むのが早道です）: "
                             + os.path.basename(path))
+            return []
         return rows
     text = smart_read(path).replace("\r\n", "\n").replace("\r", "\n")
     delim = "\t" if text.count("\t") > text.count(",") else ","

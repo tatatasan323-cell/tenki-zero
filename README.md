@@ -80,7 +80,9 @@ python app.py
 万一「Excelをスキップ」と表示される環境（他OS・32bit等）では、`増築.bat` をダブルクリック
 （venv＝増築部屋を建てて借り物を入れ直します。コマンド派は `python -m venv .venv` → `.venv\Scripts\pip install -r requirements.txt`）。
 その場合もCSV機能は常に動きます。
-※ PDFで読めるのは「文字の入った表形式のPDF」です。スキャン画像・手書きは、AIに「この表をCSVにして」と頼んでCSVで投入してください。
+※ PDFで読めるのは、文字が入っていて、**1行に項目（日付・取引先・品目・金額など）が空白2つ以上かタブで並んでいる**形のPDFだけです。
+罫線で囲んだ表の形のPDF・スキャン画像・手書きは読めません（受付画面に「PDFから表を読み取れませんでした」と出ます）。
+その時は、AIに「この表をCSVにして」と頼んでCSVで投入してください。
 
 サンプル（架空5店舗・2026年5月・1ヶ月分）を同梱しています。そのまま
 `python close.py 2026-05` で動きを確かめられます。
@@ -111,3 +113,15 @@ python app.py
 制作：AI内製化工房 MITA　｜　公式チャンネル：https://note.com/ai_naiseika ─ 連載「AI内製化の羅針盤」#13の成果物。
 ご利用は自己責任で。会計・税務の最終判断は税理士等の専門家にご相談ください。
 入口はいつも同じ ―― 「こういう仕組みが欲しい」とAIに渡しただけ。
+
+## 過去の版について（PDFを読む部品）
+
+2026年7月5日〜10月22日の版（コミット 6ebc5a7 〜 3d4ab52）には、PDFを読む部品 **PyMuPDF 1.28.0**（GNU AGPL v3.0）を、`lib/` に同梱していました。
+PyPIで配られている版のまま、手を加えていません。
+この部品は、上流（pymupdf/PyMuPDF）の 1.28.0 のコミット `e9cdfc9e7fe3260efcc9d28713903f075ab05bce` から作られた物で、対応するソースコードは上流で公開されています。
+
+- PyMuPDF 1.28.0 のソース：https://github.com/pymupdf/PyMuPDF/tree/1.28.0
+- 中に含まれる MuPDF のソース：https://github.com/ArtifexSoftware/mupdf
+- ライセンス文（AGPL v3.0）：https://www.gnu.org/licenses/agpl-3.0.html
+
+2026年10月23日以降の版には、PyMuPDF を同梱していません（PDFを読む時は 増築.bat で入れます）。

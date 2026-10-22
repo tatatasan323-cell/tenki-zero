@@ -8,7 +8,7 @@
 - 完全ローカル: 127.0.0.1のみで待ち受け。データはこのPCから一歩も出ない
 - 何度でもアップロード可。同じ内容のファイルは自動でスキップ（内容ハッシュで判定）
 - 行レベルの重複（同じ日の同じ数字）も close.py 側で自動排除
-- Excel(.xlsx)/PDFの請求書もそのまま投入可（requirements.txt の借り物を入れた場合）
+- Excel(.xlsx)の請求書もそのまま投入可。PDFは1行に項目が並んだ形だけ（PyMuPDFを入れた場合）
 """
 import os, io, sys, json, base64, hashlib, re, socket, webbrowser
 import urllib.request, importlib, traceback, time, threading
@@ -100,7 +100,7 @@ footer{max-width:1180px;margin:12px auto 30px;padding:14px 20px;color:#8296ad;fo
 
 <div class="grid">
   <div class="card"><h3>経費（請求書）</h3>
-    <div class="zone exp" data-type="expenses"><b>ここに放り込む</b><br>正規化CSV / バラバラ請求書CSV<br>Excel(.xlsx) / PDF もOK</div>
+    <div class="zone exp" data-type="expenses"><b>ここに放り込む</b><br>正規化CSV / バラバラ請求書CSV<br>Excel(.xlsx)もOK ／ PDFは1行に項目が並んだ形だけ（要PyMuPDF）</div>
     <div class="list" id="list-expenses"></div></div>
   <div class="card"><h3>売上</h3>
     <div class="zone" data-type="sales"><b>ここに放り込む</b><br>売上集計ツールの「連携用CSV」<br>日次売上CSV / Excel もOK<br>
