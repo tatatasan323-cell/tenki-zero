@@ -9,3 +9,6 @@ __pycache__/
 # AGPLのPyMuPDFは同梱しない（ライセンスの都合。PDFを読む人が増築.batかpipで入れる）
 lib/pymupdf/
 lib/fitz/
+
+# 作業の退避置き場（旧版）。公開しない
+_backup/
