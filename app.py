@@ -94,6 +94,7 @@ a.cta:hover{filter:brightness(1.1)}
 .ok{color:#7fe0ae}.skip{color:#ffce7a}.err{color:#ff8a8a}
 footer{max-width:1180px;margin:12px auto 30px;padding:14px 20px;color:#8296ad;font-size:.78rem;
  border-top:1px solid rgba(255,255,255,.08)}
+footer a.credit{color:#8fd0ff}
 </style></head><body><div class="wrap">
 <h1>tenki-zero ─ 受付</h1>
 <div class="sub">月末までに、届いた書類をここへ放り込んでおくだけ。何度でも追加OK・<b>同じものは自動でスキップ</b>されます。データはこのPCから出ません。</div>
@@ -126,7 +127,7 @@ footer{max-width:1180px;margin:12px auto 30px;padding:14px 20px;color:#8296ad;fo
 <div id="log"></div>
 <input type="file" id="picker" multiple hidden>
 </div>
-<footer><b>tenki-zero ─ 受付</b> ／ 制作：AI内製化工房 MITA　｜　公式チャンネル：https://note.com/ai_naiseika<br>
+<footer><b>tenki-zero ─ 受付</b> ／ <a class="credit" href="https://ai-naiseika.github.io/" target="_blank" rel="noopener noreferrer">制作：AI内製化工房 MITA ›</a>　｜　公式チャンネル：https://note.com/ai_naiseika<br>
 データはこのPCの中だけで処理され、外部には送信されません。ご利用は自己責任で。会計・税務の最終判断は税理士等の専門家にご相談ください。</footer>
 <script>
 let curType=null;

@@ -95,6 +95,7 @@ th,td{border:1px solid rgba(255,255,255,.08);padding:5px 9px;text-align:right;co
 th{background:rgba(255,255,255,.05);color:#dce8f6} td.l,th.l{text-align:left}
 .cta{background:linear-gradient(118deg,rgba(245,165,36,.14),rgba(61,143,230,.12));border:1px solid rgba(255,214,122,.35);
  border-radius:16px;padding:16px 20px;margin:14px 0}
+a.credit{color:#8fd0ff}
 </style></head><body><div class="wrap">
 <h1>tenki-zero 体験版 ─ 転記ゼロを、ブラウザで試す</h1>
 <div class="sub">売上・経費・勤怠を放り込んで「締める」を押すと、月次帳票が一括で出ます。</div>
@@ -138,7 +139,7 @@ th{background:rgba(255,255,255,.05);color:#dce8f6} td.l,th.l{text-align:left}
 </div>
 
 <p class="muted" style="border-top:1px solid rgba(255,255,255,.08);padding-top:12px;margin-top:18px">
-<b>tenki-zero ─ 体験版</b> ／ 制作：AI内製化工房 MITA　｜　公式チャンネル：https://note.com/ai_naiseika ─ 連載「AI内製化の羅針盤」#13<br>
+<b>tenki-zero ─ 体験版</b> ／ <a class="credit" href="https://ai-naiseika.github.io/" target="_blank" rel="noopener noreferrer">制作：AI内製化工房 MITA ›</a>　｜　公式チャンネル：https://note.com/ai_naiseika ─ 連載「AI内製化の羅針盤」#13<br>
 すべてブラウザの中だけで動きます（送信・保存なし）。ご利用は自己責任で。会計・税務の最終判断は税理士等の専門家にご相談ください。</p>
 <input type="file" id="picker" multiple hidden>
 </div><script>
